@@ -10,6 +10,7 @@ import re
 import socket
 import sqlite3
 import urllib.error
+from collections import Counter
 from contextlib import closing
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -329,7 +330,7 @@ def export_csv():
         if profile is None:
             return jsonify(error="Pick a person first."), 404
         rows = conn.execute(
-            "SELECT taken_at, systolic, diastolic, pulse, position, tags, note "
+            "SELECT taken_at, systolic, diastolic, pulse, position, tags, note, created_at "
             "FROM readings WHERE profile_id = ? ORDER BY taken_at, id",
             (profile_id,),
         ).fetchall()
@@ -338,10 +339,17 @@ def export_csv():
     writer = csv.writer(out)
     writer.writerow(["Date", "Time", "Systolic", "Diastolic", "Pulse",
                      "Category", "Position", "Tags", "Note"])
+    # Readings saved together from one note share its text and created_at.
+    # A note with several readings only repeats numbers already in the columns,
+    # so the export keeps notes from single-reading saves only.
+    save_sizes = Counter((r["created_at"], r["note"]) for r in rows)
     for r in rows:
         when = datetime.fromisoformat(r["taken_at"])
         category = categorize(r["systolic"], r["diastolic"])
         tags = [TAGS[t] for t in (r["tags"] or "").split(",") if t in TAGS]
+        note = ""
+        if save_sizes[(r["created_at"], r["note"])] == 1:
+            note = " / ".join(line.strip() for line in (r["note"] or "").splitlines() if line.strip())
         writer.writerow([
             when.strftime("%Y-%m-%d"),
             when.strftime("%H:%M"),
@@ -349,14 +357,14 @@ def export_csv():
             CATEGORIES.get(category, ""),
             POSITIONS.get(r["position"], ""),
             "; ".join(tags),
-            csv_safe(r["note"] or ""),
+            csv_safe(note),
         ])
 
     name = re.sub(r"[^A-Za-z0-9_-]+", "-", profile["name"]).strip("-") or "readings"
     filename = f"pulse-pressure-{name}-{datetime.now():%Y-%m-%d}.csv"
     # The BOM lets Excel open the file with the right encoding
     return Response(
-        "﻿" + out.getvalue(),
+        "\ufeff" + out.getvalue(),
         mimetype="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
