@@ -8,7 +8,20 @@ into clean data.
 Everything runs locally. No account, no cloud, no API bill, and no health data
 leaving the machine.
 
-> Status: the note parser is working and tested. The web app is next.
+## Features
+
+- **Two ways to log:** a quick form (three numbers plus tap-to-pick position
+  and tags) for everyday use, or a free-text note read by the local model
+- **Position and tags:** sitting / standing / lying down; medication taken,
+  stressed, after exercise, caffeine. The app remembers your usual position.
+- **AHA categories:** each reading is labeled Normal, Elevated, Stage 1 high,
+  Stage 2 high or Hypertensive crisis using general adult ranges
+- **Crisis alert:** a reading above 180/120 shows a clear warning with what to do
+- **Trend chart:** systolic, diastolic and pulse over the last 20 readings
+- **Averages:** last 7 days, last 30 days and all time, with reading counts
+- **CSV export** to bring to a doctor's appointment
+
+Run `pip install flask`, then `python app.py`, and open the address it prints.
 
 ## How it works
 

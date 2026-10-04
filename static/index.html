@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pulse &amp; Pressure</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <main>
+        <div class="top">
+            <h1>Pulse &amp; Pressure</h1>
+            <div class="who">
+                <select id="profile" aria-label="Whose readings"></select>
+                <button id="add-profile" class="small" type="button" aria-label="Add a person"
+                    title="Add a person">+</button>
+            </div>
+        </div>
+
+        <p id="no-profile" class="card" hidden>Tap <strong>+</strong> to add a person and get started.</p>
+
+        <section id="crisis" class="card crisis" role="alert" hidden>
+            <h2>&#9888; This reading is in the hypertensive crisis range</h2>
+            <p>A reading higher than 180/120 can be dangerous. <strong>Wait 5 minutes, then measure
+                    again.</strong></p>
+            <p>If it's still this high and you have any of these, <strong>call 911 (or your local emergency number)
+                    now</strong>:</p>
+            <ul>
+                <li>Chest pain or shortness of breath</li>
+                <li>Back pain, numbness or weakness</li>
+                <li>A change in vision or trouble speaking</li>
+            </ul>
+            <p>If it's still this high and you feel fine, contact your doctor right away.</p>
+            <button id="crisis-close" type="button">I understand</button>
+        </section>
+
+        <div id="person-view" hidden>
+            <section id="entry" class="card">
+                <h2>Log a reading</h2>
+                <div class="tabs" role="tablist" aria-label="How to log">
+                    <button id="tab-quick" type="button" role="tab" aria-controls="quick-mode">Quick entry</button>
+                    <button id="tab-note" type="button" role="tab" aria-controls="note-mode">Type a note</button>
+                </div>
+
+                <div id="quick-mode" role="tabpanel" aria-labelledby="tab-quick">
+                    <div class="grid">
+                        <label>Top (systolic)<input id="q-systolic" type="number" inputmode="numeric" min="0"
+                                step="1"></label>
+                        <label>Bottom (diastolic)<input id="q-diastolic" type="number" inputmode="numeric" min="0"
+                                step="1"></label>
+                        <label>Pulse<input id="q-pulse" type="number" inputmode="numeric" min="0" step="1"></label>
+                    </div>
+                    <label>When<input id="q-when" type="datetime-local"></label>
+                    <div id="q-details" class="details"></div>
+                    <div class="actions">
+                        <button id="q-save" class="primary" type="button">Save reading</button>
+                    </div>
+                </div>
+
+                <div id="note-mode" role="tabpanel" aria-labelledby="tab-note" hidden>
+                    <textarea id="note"
+                        placeholder="Type or dictate it the way you'd write a note, like: 128 over 82, pulse 71, after coffee"></textarea>
+                    <div class="actions">
+                        <button id="read" class="primary" type="button">Read it</button>
+                    </div>
+                </div>
+                <p id="status" class="status" role="status"></p>
+            </section>
+
+            <section id="confirm" class="card" hidden>
+                <h2>Check before saving</h2>
+                <p class="muted">This is what the model read from your note. Fix anything that looks wrong. Nothing is
+                    saved until you tap Save.</p>
+                <p id="empty-msg" class="warn" hidden>Nothing to save yet. Add a reading by hand below, or cancel and
+                    rewrite the note.</p>
+                <div id="rows"></div>
+                <div class="actions">
+                    <button id="add-row" type="button">+ Add a reading</button>
+                </div>
+                <div id="n-details" class="details"></div>
+                <div class="actions">
+                    <button id="save" class="primary" type="button">Save</button>
+                    <button id="cancel" type="button">Cancel</button>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2>Averages</h2>
+                <div id="stats" class="stats"></div>
+            </section>
+
+            <section class="card">
+                <h2>Trend</h2>
+                <p id="chart-empty" class="muted">Save at least two readings to see a trend.</p>
+                <div id="chart-wrap" hidden>
+                    <div class="legend">
+                        <span><i class="key sys"></i>Systolic</span>
+                        <span><i class="key dia"></i>Diastolic</span>
+                        <span><i class="key pulse"></i>Pulse</span>
+                    </div>
+                    <div id="readout" class="readout" aria-live="polite"></div>
+                    <svg id="chart" tabindex="0" role="img"
+                        aria-label="Trend of the last 20 readings. Use the left and right arrow keys to step through them."></svg>
+                    <p class="muted">Last 20 readings, oldest on the left. Tap or hover to see a reading.</p>
+                </div>
+            </section>
+
+            <section id="history" class="card">
+                <div class="card-head">
+                    <h2>Recent readings</h2>
+                    <a id="export" class="button" href="#" download hidden>Export CSV</a>
+                </div>
+                <p id="recent-empty" class="muted">Nothing saved yet.</p>
+                <ul id="recent"></ul>
+                <div id="pager" class="pager" hidden>
+                    <button id="newer" type="button"><span aria-hidden="true">&lsaquo;</span> Newer</button>
+                    <span id="page-info" class="muted" aria-live="polite"></span>
+                    <button id="older" type="button">Older <span aria-hidden="true">&rsaquo;</span></button>
+                </div>
+            </section>
+        </div>
+
+        <footer>
+            A logging tool, not medical advice. Categories use general American Heart Association ranges for
+            adults; your doctor may set different targets. For very high readings, or symptoms like chest pain or a
+            severe headache, contact a doctor or emergency services. Your readings stay on the computer running this
+            app.
+        </footer>
+    </main>
+
+    <script src="/static/chart.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+
+</html>
