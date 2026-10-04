@@ -143,6 +143,20 @@
         </footer>
     </main>
 
+    <dialog id="person-dialog" aria-labelledby="person-title">
+        <form id="person-form" novalidate>
+            <h2 id="person-title">Add a person</h2>
+            <p id="person-message" class="muted"></p>
+            <label>Name<input id="person-name" type="text" maxlength="40" autocomplete="off"
+                    autocapitalize="words" enterkeyhint="done"></label>
+            <p id="person-error" class="status error" role="alert"></p>
+            <div class="actions">
+                <button class="primary" type="submit">Add person</button>
+                <button id="person-cancel" type="button">Cancel</button>
+            </div>
+        </form>
+    </dialog>
+
     <input id="restore-file" type="file" accept=".csv,text/csv" hidden>
 
     <script src="data.js"></script>

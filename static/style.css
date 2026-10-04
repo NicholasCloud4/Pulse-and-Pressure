@@ -554,3 +554,30 @@ footer {
     color: var(--muted);
     padding: 4px 0 24px;
 }
+
+/* "Add a person" window */
+dialog {
+    width: min(400px, calc(100% - 32px));
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--card);
+    color: var(--text);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+dialog::backdrop {
+    background: rgba(0, 0, 0, 0.45);
+}
+
+dialog form {
+    padding: 20px;
+}
+
+dialog p {
+    margin: 0 0 12px;
+}
+
+dialog .status {
+    margin: 6px 0 0;
+}

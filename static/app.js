@@ -83,18 +83,37 @@ function renderProfiles() {
     if (hasPerson) loadAll(true);
 }
 
-function promptForProfile(suggestedName) {
-    const name = (prompt("Whose readings are these? Enter a name:", suggestedName || "") || "").trim();
-    if (!name) return null;
-    try {
-        const p = addProfile(name);
-        store("profileId", p.id);
-        renderProfiles();
-        return p;
-    } catch (e) {
-        alert(e.message);
-        return null;
-    }
+// Shows the "Add a person" window. Resolves with the new person, or null if cancelled.
+function openPersonDialog(suggestedName, message) {
+    const dialog = $("person-dialog");
+    $("person-name").value = suggestedName || "";
+    $("person-message").textContent = message || "Whose readings are these?";
+    $("person-error").textContent = "";
+    dialog.showModal();
+    $("person-name").focus();
+
+    return new Promise((resolve) => {
+        let added = null;
+        $("person-form").onsubmit = (e) => {
+            e.preventDefault();
+            try {
+                added = addProfile($("person-name").value);
+                dialog.close();
+            } catch (err) {
+                $("person-error").textContent = err.message;  // e.g. the name is already taken
+                $("person-name").focus();
+            }
+        };
+        $("person-cancel").onclick = () => dialog.close();
+        dialog.onclick = (e) => { if (e.target === dialog) dialog.close(); };  // tap outside to cancel
+        dialog.onclose = () => {  // also runs when Escape is pressed
+            if (added) {
+                store("profileId", added.id);
+                renderProfiles();
+            }
+            resolve(added);
+        };
+    });
 }
 
 // ---------- Position and tags ----------
@@ -455,7 +474,8 @@ async function restoreFile(file) {
         return;
     }
     const fileName = nameFromFile(file.name);
-    if (profileId === null && !promptForProfile(fileName)) return;
+    if (profileId === null
+        && !(await openPersonDialog(fileName, "Whose readings are in " + file.name + "?"))) return;
     const who = profileName(profileId);
     if (fileName && fileName.toLowerCase() !== who.toLowerCase()
         && !confirm("This file looks like " + fileName + "'s readings. Add them to " + who + "?")) {
@@ -489,7 +509,7 @@ $("add-row").onclick = () => {
     renderDraft();
 };
 $("crisis-close").onclick = () => { $("crisis").hidden = true; };
-$("add-profile").onclick = () => promptForProfile();
+$("add-profile").onclick = () => openPersonDialog();
 $("profile").onchange = () => {
     profileId = $("profile").value;
     store("profileId", profileId);
