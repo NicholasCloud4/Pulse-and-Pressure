@@ -2,6 +2,7 @@ const $ = (id) => document.getElementById(id);
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const FIELDS = ["systolic", "diastolic", "pulse"];
 const STATUS = { normal: "good", elevated: "warning", stage1: "serious", stage2: "critical", crisis: "critical" };
+const options = { positions: POSITIONS, tags: TAGS, categories: CATEGORIES };
 
 // Words in a typed note that pre-select a tag or position (you can still change them)
 const TAG_HINTS = {
@@ -16,7 +17,6 @@ const POSITION_HINTS = {
     lying: /\b(lying|laying|lay|lie|in bed)\b/i,
 };
 
-let options = { positions: {}, tags: {}, categories: {} };
 let profileId = null;
 let draft = [];
 let chartData = [];
@@ -26,6 +26,7 @@ let totalReadings = 0;
 const quick = { position: null, tags: new Set(), timeTouched: false };
 const noteDetails = { position: null, tags: new Set() };
 
+// Only used for reading notes, which needs app.py and Ollama on a computer
 async function api(path, options) {
     const res = await fetch(path, options);
     let data = {};
@@ -39,6 +40,7 @@ async function api(path, options) {
     return data;
 }
 
+// Small per-device preferences (not readings)
 function store(key, value) {
     try { localStorage.setItem(key, value); } catch (e) { /* storage blocked */ }
 }
@@ -53,20 +55,14 @@ function showStatus(message, isError) {
     el.className = "status" + (isError ? " error" : "");
 }
 
-function nowLocal() {
-    const d = new Date();
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().slice(0, 16);
-}
-
 function savedPosition() {
     const p = recall("position");
     return p in options.positions ? p : null;
 }
 
 // ---------- People ----------
-async function loadProfiles() {
-    const { profiles } = await api("/api/profiles");
+function renderProfiles() {
+    const profiles = listProfiles();
     const sel = $("profile");
     sel.replaceChildren();
     profiles.forEach((p) => {
@@ -77,25 +73,27 @@ async function loadProfiles() {
     });
 
     const saved = recall("profileId");
-    if (profiles.some((p) => String(p.id) === saved)) sel.value = saved;
+    if (profiles.some((p) => p.id === saved)) sel.value = saved;
 
-    profileId = sel.value ? Number(sel.value) : null;
+    profileId = sel.value || null;
     const hasPerson = profileId !== null;
     sel.hidden = !hasPerson;
     $("no-profile").hidden = hasPerson;
     $("person-view").hidden = !hasPerson;
-    if (hasPerson) await loadAll(true);
+    if (hasPerson) loadAll(true);
 }
 
-async function addProfile() {
-    const name = (prompt("Whose readings are these? Enter a name:") || "").trim();
-    if (!name) return;
+function promptForProfile(suggestedName) {
+    const name = (prompt("Whose readings are these? Enter a name:", suggestedName || "") || "").trim();
+    if (!name) return null;
     try {
-        const p = await api("/api/profiles", { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ name }) });
-        store("profileId", String(p.id));
-        await loadProfiles();
+        const p = addProfile(name);
+        store("profileId", p.id);
+        renderProfiles();
+        return p;
     } catch (e) {
         alert(e.message);
+        return null;
     }
 }
 
@@ -139,28 +137,26 @@ function detailsOf(state) {
 }
 
 // ---------- Saving (shared by both ways of logging) ----------
-async function saveReadings(readings, extra, force) {
-    const body = { profile_id: profileId, readings, ...extra, force: !!force };
+function saveReadings(readings, extra) {
+    const problems = [];
+    readings.forEach((r, i) => looksPlausible(r).forEach((p) => problems.push("Reading " + (i + 1) + ": " + p)));
+    if (problems.length && !confirm("These look unusual:\n\n" + problems.join("\n") + "\n\nSave anyway?")) {
+        return null;
+    }
     try {
-        return await api("/api/readings", { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(body) });
+        return addReadings(profileId, readings, extra);
     } catch (e) {
-        if (e.status === 422 && e.data && e.data.problems) {
-            if (confirm("These look unusual:\n\n" + e.data.problems.join("\n") + "\n\nSave anyway?")) {
-                return saveReadings(readings, extra, true);
-            }
-            return null;
-        }
         alert(e.message);
         return null;
     }
 }
 
-async function afterSave(result, position) {
+function afterSave(result, position) {
     if (position) store("position", position);
     showStatus("Saved.", false);
     $("crisis").hidden = !result.crisis;
     if (result.crisis) $("crisis").scrollIntoView({ behavior: "smooth", block: "start" });
-    await loadAll(true);  // back to the newest readings
+    loadAll(true);  // back to the newest readings
 }
 
 // ---------- Quick entry ----------
@@ -169,7 +165,7 @@ function resetQuickTime() {
     $("q-when").value = nowLocal();
 }
 
-async function saveQuick() {
+function saveQuick() {
     const reading = {};
     FIELDS.forEach((key) => {
         const v = $("q-" + key).value;
@@ -179,21 +175,16 @@ async function saveQuick() {
         showStatus("Enter at least one number.", true);
         return;
     }
-    // An untouched time means "now"; the server fills it in
+    // An untouched time means "now"
     reading.taken_at = quick.timeTouched ? $("q-when").value : null;
 
-    $("q-save").disabled = true;
-    try {
-        const result = await saveReadings([reading], detailsOf(quick));
-        if (!result) return;
-        FIELDS.forEach((key) => { $("q-" + key).value = ""; });
-        quick.tags.clear();  // the position is kept for next time; tags are per reading
-        renderDetails($("q-details"), quick);
-        resetQuickTime();
-        await afterSave(result, quick.position);
-    } finally {
-        $("q-save").disabled = false;
-    }
+    const result = saveReadings([reading], detailsOf(quick));
+    if (!result) return;
+    FIELDS.forEach((key) => { $("q-" + key).value = ""; });
+    quick.tags.clear();  // the position is kept for next time; tags are per reading
+    renderDetails($("q-details"), quick);
+    resetQuickTime();
+    afterSave(result, quick.position);
 }
 
 function setMode(mode) {
@@ -204,6 +195,16 @@ function setMode(mode) {
     if (mode === "quick") cancelDraft();
     showStatus("", false);
     store("mode", mode);
+}
+
+// The note tab only shows when app.py is running with Ollama (not on the website)
+async function checkNotes() {
+    let available = false;
+    try {
+        available = !!(await api("/api/status")).notes;
+    } catch (e) { /* no server: hosted as a plain website */ }
+    $("tabs").hidden = !available;
+    setMode(available && recall("mode") === "note" ? "note" : "quick");
 }
 
 // ---------- Reading a note ----------
@@ -266,7 +267,7 @@ function rowEl(r, i) {
         inp.value = r[key] === null || r[key] === undefined ? "" : r[key];
         inp.oninput = () => {
             r[key] = inp.value === "" ? null : parseInt(inp.value, 10);
-            warn.hidden = true;  // the server re-checks when you save
+            warn.hidden = true;  // checked again when you save
         };
         l.appendChild(inp);
         grid.appendChild(l);
@@ -299,18 +300,13 @@ function cancelDraft() {
     $("confirm").hidden = true;
 }
 
-async function saveDraft() {
+function saveDraft() {
     const readings = draft.map((r) => ({ systolic: r.systolic, diastolic: r.diastolic, pulse: r.pulse, taken_at: r.taken_at }));
-    $("save").disabled = true;
-    try {
-        const result = await saveReadings(readings, { note: $("note").value.trim(), ...detailsOf(noteDetails) });
-        if (!result) return;
-        $("note").value = "";
-        cancelDraft();
-        await afterSave(result, noteDetails.position);
-    } finally {
-        $("save").disabled = draft.length === 0;
-    }
+    const result = saveReadings(readings, { note: $("note").value.trim(), ...detailsOf(noteDetails) });
+    if (!result) return;
+    $("note").value = "";
+    cancelDraft();
+    afterSave(result, noteDetails.position);
 }
 
 // ---------- Shared display helpers ----------
@@ -340,29 +336,23 @@ function badge(category) {
     return span;
 }
 
-// ---------- Loading everything for a person ----------
-async function loadAll(resetPage) {
+// ---------- Showing everything for a person ----------
+function loadAll(resetPage) {
     if (resetPage) historyPage = 0;
-    const [{ readings }, { periods }] = await Promise.all([
-        api("/api/readings?profile_id=" + profileId + "&limit=20"),
-        api("/api/stats?profile_id=" + profileId),
-    ]);
-    totalReadings = periods[periods.length - 1].count;  // the "All time" count
-    renderStats(periods);
-    chartData = readings.slice().reverse();
+    const readings = readingsFor(profileId);
+    totalReadings = readings.length;
+    renderStats(statsFor(profileId));
+    chartData = readings.slice(0, 20).reverse();
     renderChart();
-    $("export").href = "/api/export.csv?profile_id=" + profileId;
     $("export").hidden = totalReadings === 0;
-    await loadHistory();
+    loadHistory();
 }
 
-async function loadHistory() {
+function loadHistory() {
     const pages = Math.max(1, Math.ceil(totalReadings / PAGE_SIZE));
     historyPage = Math.min(historyPage, pages - 1);  // e.g. after deleting the last reading on a page
     const first = historyPage * PAGE_SIZE;
-    const { readings } = await api(
-        "/api/readings?profile_id=" + profileId + "&limit=" + PAGE_SIZE + "&offset=" + first
-    );
+    const readings = readingsFor(profileId).slice(first, first + PAGE_SIZE);
     renderHistory(readings);
     $("pager").hidden = totalReadings <= PAGE_SIZE;
     $("page-info").textContent = (first + 1) + "–" + (first + readings.length) + " of " + totalReadings;
@@ -370,12 +360,10 @@ async function loadHistory() {
     $("older").disabled = historyPage >= pages - 1;
 }
 
-async function turnPage(step) {
+function turnPage(step) {
     historyPage += step;
-    try {
-        await loadHistory();
-        $("history").scrollIntoView({ behavior: "smooth", block: "start" });
-    } catch (e) { alert(e.message); }
+    loadHistory();
+    $("history").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function renderStats(periods) {
@@ -427,16 +415,62 @@ function renderHistory(readings) {
         del.type = "button";
         del.className = "link danger";
         del.textContent = "Delete";
-        del.onclick = async () => {
+        del.onclick = () => {
             if (!confirm("Delete this reading?")) return;
             try {
-                await api("/api/readings/" + r.id, { method: "DELETE" });
-                await loadAll();
+                deleteReading(r.id);
+                loadAll();
             } catch (e) { alert(e.message); }
         };
         li.append(text, del);
         ul.appendChild(li);
     });
+}
+
+// ---------- Export and restore ----------
+function downloadCsv() {
+    const blob = new Blob([exportCsv(profileId)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = exportFileName(profileId);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// "pulse-pressure-Nicholas-2026-10-03 (2).csv" -> "Nicholas"
+function nameFromFile(fileName) {
+    const m = /^pulse-pressure-(.+?)-\d{4}-\d{2}-\d{2}/.exec(fileName);
+    return m ? m[1].replace(/-/g, " ") : "";
+}
+
+async function restoreFile(file) {
+    let text;
+    try {
+        text = await file.text();
+    } catch (e) {
+        alert("Couldn't open that file.");
+        return;
+    }
+    const fileName = nameFromFile(file.name);
+    if (profileId === null && !promptForProfile(fileName)) return;
+    const who = profileName(profileId);
+    if (fileName && fileName.toLowerCase() !== who.toLowerCase()
+        && !confirm("This file looks like " + fileName + "'s readings. Add them to " + who + "?")) {
+        return;
+    }
+    try {
+        const { added, skipped, unreadable } = importCsv(profileId, text);
+        const lines = [added === 1 ? "Restored 1 reading for " + who + "." : "Restored " + added + " readings for " + who + "."];
+        if (skipped) lines.push(skipped + (skipped === 1 ? " was" : " were") + " already on this device.");
+        if (unreadable) lines.push(unreadable + (unreadable === 1 ? " row" : " rows") + " couldn't be read and " + (unreadable === 1 ? "was" : "were") + " skipped.");
+        loadAll(true);
+        alert(lines.join("\n"));
+    } catch (e) {
+        alert(e.message);
+    }
 }
 
 // ---------- Wire it up ----------
@@ -455,27 +489,42 @@ $("add-row").onclick = () => {
     renderDraft();
 };
 $("crisis-close").onclick = () => { $("crisis").hidden = true; };
-$("add-profile").onclick = addProfile;
+$("add-profile").onclick = () => promptForProfile();
 $("profile").onchange = () => {
-    profileId = Number($("profile").value);
-    store("profileId", String(profileId));
+    profileId = $("profile").value;
+    store("profileId", profileId);
     cancelDraft();
     $("crisis").hidden = true;
-    loadAll(true).catch((e) => showStatus(e.message, true));
+    loadAll(true);
 };
 $("newer").onclick = () => turnPage(-1);
 $("older").onclick = () => turnPage(1);
+$("export").onclick = downloadCsv;
+document.querySelectorAll(".restore").forEach((b) => { b.onclick = () => $("restore-file").click(); });
+$("restore-file").onchange = async () => {
+    const file = $("restore-file").files[0];
+    $("restore-file").value = "";  // so picking the same file again still works
+    if (file) await restoreFile(file);
+};
 window.addEventListener("resize", renderChart);
 // Keep the quick-entry time current while the page sits open
 setInterval(() => { if (!quick.timeTouched) $("q-when").value = nowLocal(); }, 30000);
 
-async function start() {
-    options = await api("/api/options");
+function start() {
+    try {
+        loadData();
+    } catch (e) {
+        $("storage-error").textContent = e.message;
+        $("storage-error").hidden = false;
+        return;
+    }
+    askToKeepData();
     quick.position = savedPosition();
     renderDetails($("q-details"), quick);
     resetQuickTime();
-    setMode(recall("mode") === "note" ? "note" : "quick");
-    await loadProfiles();
+    setMode("quick");
+    checkNotes();
+    renderProfiles();
 }
 
-start().catch((e) => showStatus(e.message, true));
+start();

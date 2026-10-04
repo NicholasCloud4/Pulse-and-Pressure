@@ -142,8 +142,7 @@ label input {
     font-size: 1.1rem;
 }
 
-button,
-a.button {
+button {
     font: inherit;
     cursor: pointer;
     border-radius: 10px;
@@ -154,12 +153,15 @@ a.button {
     color: var(--text);
 }
 
-a.button {
-    display: inline-flex;
-    align-items: center;
-    text-decoration: none;
+button.compact {
     min-height: 44px;
+    padding: 0 14px;
     font-size: 0.95rem;
+}
+
+.head-actions {
+    display: flex;
+    gap: 8px;
 }
 
 button.primary {
@@ -374,7 +376,7 @@ button.danger {
 /* Stats */
 .stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
     gap: 10px;
 }
 

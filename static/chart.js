@@ -1,5 +1,5 @@
-// Trend chart for Pulse & Pressure. Loaded before app.js, which calls
-// renderChart() and provides chartData, options, bpText and whenText.
+// Trend chart for Pulse & Pressure. Loaded after data.js and before app.js,
+// which calls renderChart() and provides chartData, options, bpText and whenText.
 
 // ---------- Trend chart (plain SVG, no library, works offline) ----------
 const SVG_NS = "http://www.w3.org/2000/svg";

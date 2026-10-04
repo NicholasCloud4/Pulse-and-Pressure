@@ -5,7 +5,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Pulse &amp; Pressure</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9D%A4%EF%B8%8F%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
@@ -19,7 +21,13 @@
             </div>
         </div>
 
-        <p id="no-profile" class="card" hidden>Tap <strong>+</strong> to add a person and get started.</p>
+        <p id="storage-error" class="card status error" role="alert" hidden></p>
+
+        <section id="no-profile" class="card" hidden>
+            <p>Tap <strong>+</strong> to add a person and get started.</p>
+            <p class="muted">Already have readings in an exported file? Restore them onto this device.</p>
+            <button class="restore compact" type="button">Restore from file</button>
+        </section>
 
         <section id="crisis" class="card crisis" role="alert" hidden>
             <h2>&#9888; This reading is in the hypertensive crisis range</h2>
@@ -39,7 +47,7 @@
         <div id="person-view" hidden>
             <section id="entry" class="card">
                 <h2>Log a reading</h2>
-                <div class="tabs" role="tablist" aria-label="How to log">
+                <div id="tabs" class="tabs" role="tablist" aria-label="How to log" hidden>
                     <button id="tab-quick" type="button" role="tab" aria-controls="quick-mode">Quick entry</button>
                     <button id="tab-note" type="button" role="tab" aria-controls="note-mode">Type a note</button>
                 </div>
@@ -110,8 +118,13 @@
             <section id="history" class="card">
                 <div class="card-head">
                     <h2>Recent readings</h2>
-                    <a id="export" class="button" href="#" download hidden>Export CSV</a>
+                    <div class="head-actions">
+                        <button id="export" class="compact" type="button" hidden>Export CSV</button>
+                        <button class="restore compact" type="button">Restore</button>
+                    </div>
                 </div>
+                <p class="muted">Readings are saved only in this browser, on this device. Export a file now and then
+                    as a backup. Restore adds back any readings from a file that are missing here.</p>
                 <p id="recent-empty" class="muted">Nothing saved yet.</p>
                 <ul id="recent"></ul>
                 <div id="pager" class="pager" hidden>
@@ -125,13 +138,16 @@
         <footer>
             A logging tool, not medical advice. Categories use general American Heart Association ranges for
             adults; your doctor may set different targets. For very high readings, or symptoms like chest pain or a
-            severe headache, contact a doctor or emergency services. Your readings stay on the computer running this
-            app.
+            severe headache, contact a doctor or emergency services. Your readings stay in this browser on this
+            device and are never sent anywhere.
         </footer>
     </main>
 
-    <script src="/static/chart.js"></script>
-    <script src="/static/app.js"></script>
+    <input id="restore-file" type="file" accept=".csv,text/csv" hidden>
+
+    <script src="data.js"></script>
+    <script src="chart.js"></script>
+    <script src="app.js"></script>
 </body>
 
 </html>
