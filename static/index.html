@@ -5,9 +5,18 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
+    <meta name="description" content="A private blood pressure and pulse log. Readings stay on your device.">
     <title>Pulse &amp; Pressure</title>
-    <link rel="icon"
-        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9D%A4%EF%B8%8F%3C/text%3E%3C/svg%3E">
+    <!-- Installing to the home screen on Android and iPhone -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#14171a" media="(prefers-color-scheme: dark)">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Pulse">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -158,6 +167,18 @@
                     <button id="newer" type="button"><span aria-hidden="true">&lsaquo;</span> Newer</button>
                     <span id="page-info" class="muted" aria-live="polite"></span>
                     <button id="older" type="button">Older <span aria-hidden="true">&rsaquo;</span></button>
+                </div>
+            </section>
+
+            <section id="install" class="card" hidden>
+                <h2>Put it on your home screen</h2>
+                <p id="install-text"></p>
+                <p id="install-move" class="muted" hidden>On iPhone and iPad, the home-screen app keeps its own
+                    copy of your readings, separate from the browser. Tap <strong>Export CSV</strong> above first,
+                    then open the app from your home screen and tap <strong>Restore from file</strong>.</p>
+                <div class="actions">
+                    <button id="install-go" class="primary compact" type="button" hidden>Install</button>
+                    <button id="install-later" class="compact" type="button">Not now</button>
                 </div>
             </section>
         </div>

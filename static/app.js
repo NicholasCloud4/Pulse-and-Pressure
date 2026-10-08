@@ -531,6 +531,7 @@ function loadAll(resetPage) {
     renderChart();
     $("export").hidden = totalReadings === 0;
     renderBackupNudge();
+    renderInstall();
     loadHistory();
 }
 
@@ -687,6 +688,40 @@ function snoozeBackup() {
     $("backup-nudge").hidden = true;
 }
 
+// ---------- Installing to the home screen ----------
+// Android (Chrome, Edge, Samsung Internet) offers an install prompt we can trigger;
+// iPhone and iPad only install from the Share menu, so they get instructions instead.
+let installPrompt = null;
+const isApple = /iPhone|iPad|iPod/.test(navigator.userAgent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);  // iPads report as a Mac
+
+function isInstalled() {
+    return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+}
+
+function renderInstall() {
+    const snoozedUntil = recall("installSnooze");
+    const show = profileId !== null && !isInstalled() && (installPrompt !== null || isApple)
+        && !(snoozedUntil && snoozedUntil > nowLocal());
+    $("install").hidden = !show;
+    if (!show) return;
+    $("install-go").hidden = installPrompt === null;
+    $("install-text").replaceChildren(...(installPrompt
+        ? ["Install Pulse & Pressure to open it like any other app, even without a connection."]
+        : ["Tap the Share button ", el("span", "", "(the square with an arrow)"), ", then ",
+            el("strong", "", "Add to Home Screen"), ". It then opens like an app, works without a connection, "
+            + "and Safari won't clear your readings after a week without a visit."]));
+    $("install-move").hidden = installPrompt !== null || totalReadings === 0;
+}
+
+async function install() {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice;
+    installPrompt = null;  // a prompt can only be used once
+    renderInstall();
+}
+
 // ---------- Export and restore ----------
 function downloadCsv() {
     const blob = new Blob([exportCsv(profileId)], { type: "text/csv;charset=utf-8" });
@@ -795,6 +830,20 @@ $("restore-file").onchange = async () => {
     $("restore-file").value = "";  // so picking the same file again still works
     if (file) await restoreFile(file);
 };
+$("install-go").onclick = install;
+$("install-later").onclick = () => {
+    store("installSnooze", toLocalIso(Date.now() + 30 * DAY));
+    renderInstall();
+};
+window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();  // show our own Install button instead of the browser's banner
+    installPrompt = e;
+    renderInstall();
+});
+window.addEventListener("appinstalled", () => {
+    installPrompt = null;
+    renderInstall();
+});
 window.addEventListener("resize", renderChart);
 // Keep the quick-entry time current while the page sits open
 setInterval(() => {
@@ -811,6 +860,9 @@ function start() {
         return;
     }
     askToKeepData();
+    // Works offline and installs to the home screen. Browsers only allow this on
+    // https or localhost, so it's skipped on a home-network address like 192.168.x.x.
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => { });
     quick.position = savedPosition();
     renderDetails($("q-details"), quick);
     resetQuickTime();

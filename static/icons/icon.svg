@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Full-bleed square: phones round the corners themselves. The heart stays inside
+       the middle 60%, the safe zone Android keeps when it crops icons into circles. -->
+  <rect width="100" height="100" fill="#1769aa"/>
+  <g transform="translate(20 21) scale(0.6)">
+    <path d="M50 88 C20 66 6 50 6 32 C6 18 17 8 30 8 C39 8 46 13 50 21 C54 13 61 8 70 8 C83 8 94 18 94 32 C94 50 80 66 50 88 Z"
+          fill="#ffffff"/>
+    <polyline points="8,44 34,44 41,30 50,62 58,38 63,44 92,44"
+              fill="none" stroke="#1769aa" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+</svg>

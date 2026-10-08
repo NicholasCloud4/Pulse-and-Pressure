@@ -33,6 +33,9 @@ anywhere.
   export if there hasn't been one in the last 30 days
 - **More than one person:** each person gets their own readings. Tap **⋯**
   next to the name to rename or delete a person.
+- **Install it like an app on iPhone and Android:** it gets its own home-screen
+  icon, opens full-screen and works without a connection
+  (see [Installing on a phone](#installing-on-a-phone))
 - Works on phones and computers, in light and dark mode
 
 ## Two ways to use it
@@ -73,6 +76,25 @@ stop it.
 The phone address can change after the router or computer restarts. If it stops
 working, use the one `python app.py` prints when it starts.
 
+## Installing on a phone
+
+Installing needs the web address (https), so do it from the Vercel site. A
+phone can't install from a home-network address like `http://192.168.1.77:8000`.
+
+- **Android** (Chrome, Edge or Samsung Internet): open the site and tap
+  **Install** on the "Put it on your home screen" card. You can also use the
+  browser menu, then **Install app** or **Add to Home screen**. Readings
+  already logged in the browser are there in the app too.
+- **iPhone and iPad** (Safari): tap the **Share** button, then **Add to Home
+  Screen**. The home-screen app keeps its **own** copy of your readings,
+  separate from Safari's. If you've already logged readings in Safari, tap
+  **Export CSV** there first, then open the new app and tap **Restore from
+  file**.
+
+Once installed, the app opens from its icon like any other app and works
+without a connection. Updates arrive on their own: after you publish a change,
+it shows up the second time the app is opened.
+
 ## Your data
 
 - **Readings live in the browser you log them in.** A phone and a computer each
@@ -80,8 +102,9 @@ working, use the one `python app.py` prints when it starts.
   The website, `localhost:8000` and the phone address each count separately too.
 - **Export now and then as a backup.** Clearing your browser's history or site
   data deletes the readings. On an iPhone, Safari can also clear a website's
-  data after about a week without a visit. Adding the site to the Home Screen
-  (Share, then Add to Home Screen) and opening it from there avoids that.
+  data after about a week without a visit. Installing it on the Home Screen
+  (see [Installing on a phone](#installing-on-a-phone)) and opening it from
+  there avoids that.
 - **Export CSV** (above the reading history) downloads every reading for the
   selected person, oldest first, with date, time, numbers, category, position,
   tags and notes. A note typed with several readings in it is left out of the
@@ -123,8 +146,12 @@ A reading needs both the top and bottom number to get a category.
 ## How it works
 
 - **Page:** plain HTML, CSS and JavaScript with no outside libraries. Readings
-  are stored with the browser's `localStorage`, and the chart is drawn with SVG,
-  so it works offline once loaded.
+  are stored with the browser's `localStorage`, and the chart is drawn with SVG.
+- **Installable app (PWA):** `manifest.webmanifest` gives phones the app's
+  name and icons, and the service worker `sw.js` keeps a copy of the app's
+  files so it opens offline. It never stores readings. The saved data has a
+  version number, so an older copy of the app can't overwrite data saved by a
+  newer one.
 - **Server (optional):** `app.py` is a small [Flask](https://flask.palletsprojects.com)
   app that serves the page and adds note reading. The page asks `/api/status`
   whether note reading is available and shows the "Type a note" tab only if it is.
@@ -165,6 +192,10 @@ the app always shows what it read and asks for confirmation before saving.
   export and restore
 - `static/app.js`: logging, the reading history and the buttons
 - `static/chart.js`: the trend chart
+- `static/sw.js`, `static/manifest.webmanifest`, `static/icons/`: installing
+  and working offline
+- `tests/data.test.js`: tests for `data.js`. Run `node --test` from this folder
+  (Node 18 or newer, nothing to install)
 - `app.py`: optional local server that serves the page and reads notes with Ollama
 - `parse_test.py`: sends a note to the local model and returns structured readings
 - `test_set.py`: made-up test notes with the correct answers
