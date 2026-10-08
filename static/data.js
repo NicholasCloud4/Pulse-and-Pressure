@@ -20,7 +20,9 @@ const CATEGORIES = {
 };
 
 const DATA_KEY = "pulse-pressure-data";
-let data = { profiles: [], readings: [] };
+// Raise this when the saved format changes, and add a step to upgradeData()
+const DATA_VERSION = 1;
+let data = { version: DATA_VERSION, profiles: [], readings: [] };
 
 function categorize(systolic, diastolic) {
     if (systolic === null || diastolic === null) return null;
@@ -74,7 +76,7 @@ function loadData() {
         throw new Error("This browser is blocking storage, so readings can't be saved here. "
             + "Check that site data is allowed, and that this isn't a private window.");
     }
-    if (!raw) { data = { profiles: [], readings: [] }; return; }
+    if (!raw) { data = { version: DATA_VERSION, profiles: [], readings: [] }; return; }
     let parsed;
     try {
         parsed = JSON.parse(raw);
@@ -82,7 +84,27 @@ function loadData() {
         // Stop here rather than start fresh, so the saved data isn't overwritten
         throw new Error("The readings saved in this browser couldn't be read.");
     }
-    data = { profiles: parsed.profiles || [], readings: parsed.readings || [] };
+    // An older copy of the app (for example one still saved for offline use) must not
+    // save over data it doesn't fully understand
+    if ((parsed.version || 0) > DATA_VERSION) {
+        throw new Error("These readings were saved by a newer version of the app. "
+            + "Close the app completely and open it again to update it.");
+    }
+    data = upgradeData(parsed);
+}
+
+// Bring data saved by an older version up to the current format
+function upgradeData(saved) {
+    const upgraded = { version: DATA_VERSION, profiles: saved.profiles || [], readings: saved.readings || [] };
+    if (!saved.version) {
+        // Version 1 records whether a note was typed for several readings at once.
+        // Before that it was worked out by counting the readings left in each batch.
+        const batchSizes = {};
+        upgraded.readings.forEach((r) => { batchSizes[r.batch] = (batchSizes[r.batch] || 0) + 1; });
+        upgraded.readings.forEach((r) => { r.note_shared = batchSizes[r.batch] > 1; });
+    }
+    // Future changes go here, e.g. if (saved.version < 2) { ... }
+    return upgraded;
 }
 
 // Apply a change and save it. If saving fails, the change is undone.
@@ -178,8 +200,9 @@ function cleanValues(r, which) {
     return values;
 }
 
-// Save one or more readings. Readings saved together share a batch id,
-// so the CSV export can tell a note that held several readings.
+// Save one or more readings. Readings saved together share a batch id. When a
+// typed note held several readings, note_shared marks that the note covers all of
+// them, so the CSV export can leave it out (it only repeats their numbers).
 function addReadings(profileId, readings, extra) {
     const batch = newId();
     const { position, tags } = cleanDetails(extra);
@@ -187,7 +210,7 @@ function addReadings(profileId, readings, extra) {
     const cleaned = readings.map((r, i) => ({
         id: newId(), profile_id: profileId, batch,
         ...cleanValues(r, readings.length === 1 ? "The reading" : "Reading " + (i + 1)),
-        position, tags, note,
+        position, tags, note, note_shared: readings.length > 1,
     }));
     commit((d) => d.readings.push(...cleaned));
     return {
@@ -205,7 +228,10 @@ function updateReading(id, reading, extra) {
         const r = d.readings.find((x) => x.id === id);
         if (!r) return;
         // A note written for this reading alone is exported with it, so it leaves its batch
-        if (changes.note !== r.note) r.batch = newId();
+        if (changes.note !== r.note) {
+            r.batch = newId();
+            r.note_shared = false;
+        }
         Object.assign(r, changes);
     });
 }
@@ -267,23 +293,20 @@ function csvField(value) {
     return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
 }
 
-// Stop spreadsheet apps from treating a note as a formula
+// Stop spreadsheet apps from treating a note as a formula. Notes that already start
+// with apostrophes get one more, so restoring (which removes one) gives back the original.
 function csvSafe(text) {
-    return /^[=+\-@]/.test(text) ? "'" + text : text;
+    return /^'*[=+\-@]/.test(text) ? "'" + text : text;
 }
 
 function exportCsv(profileId) {
     const readings = readingsFor(profileId).reverse();  // oldest first
-    // A note that held several readings only repeats numbers already in the
-    // columns, so only notes from single-reading saves are written
-    const batchSizes = {};
-    readings.forEach((r) => { batchSizes[r.batch] = (batchSizes[r.batch] || 0) + 1; });
-
     const lines = [CSV_HEADER];
     readings.forEach((r) => {
-        const note = batchSizes[r.batch] === 1
-            ? (r.note || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean).join(" / ")
-            : "";
+        // A note that held several readings only repeats numbers already in the columns
+        const note = r.note_shared
+            ? ""
+            : (r.note || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean).join(" / ");
         lines.push([
             r.taken_at.slice(0, 10), r.taken_at.slice(11, 16),
             r.systolic, r.diastolic, r.pulse,
@@ -324,20 +347,26 @@ function parseCsv(text) {
     return rows;
 }
 
-// Accepts 2026-10-03 or 10/3/2026 (how Excel may re-save it)
+// Accepts 2026-10-03 or 10/3/2026 (how Excel may re-save it), but not 2026-13-45
 function parseDate(text) {
-    let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text);
-    if (m) return [m[1], m[2], m[3]];
-    m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text);
-    return m ? [m[3], m[1], m[2]] : null;
+    const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text);
+    const us = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text);
+    const parts = iso ? [iso[1], iso[2], iso[3]] : us ? [us[3], us[1], us[2]] : null;
+    if (!parts) return null;
+    const [year, month, day] = parts.map(Number);
+    const d = new Date(year, month - 1, day);
+    return d.getMonth() === month - 1 && d.getDate() === day ? parts : null;
 }
 
 // Accepts 19:42, 19:42:00 or 7:42 PM
 function parseTime(text) {
     const m = /^(\d{1,2}):(\d{2})(?::\d{2})?\s*([ap]m)?$/i.exec(text || "00:00");
-    if (!m) return null;
+    if (!m || Number(m[2]) > 59) return null;
     let hour = Number(m[1]);
-    if (m[3]) hour = (hour % 12) + (m[3].toLowerCase() === "pm" ? 12 : 0);
+    if (m[3]) {
+        if (hour < 1 || hour > 12) return null;  // "13:00 PM" isn't a time
+        hour = (hour % 12) + (m[3].toLowerCase() === "pm" ? 12 : 0);
+    }
     return hour < 24 ? [hour, m[2]] : null;
 }
 
@@ -382,14 +411,17 @@ function importCsv(profileId, text) {
             return;
         }
         r.taken_at = date[0] + "-" + pad(date[1]) + "-" + pad(date[2]) + "T" + pad(time[0]) + ":" + time[1];
+        if (r.taken_at > nowLocal()) { unreadable++; return; }  // same rule as saving
         if (existing.has(sameReading(r))) { skipped++; return; }
         existing.add(sameReading(r));
         let note = cell(row, "note");
-        if (/^'[=+\-@]/.test(note)) note = note.slice(1);  // undo csvSafe()
+        if (/^'+[=+\-@]/.test(note)) note = note.slice(1);  // undo csvSafe()
         found.push({
-            ...r, note,
-            position: keyFor(POSITIONS, cell(row, "position")),
-            tags: cell(row, "tags").split(/[;,]/).map((t) => keyFor(TAGS, t)).filter(Boolean),
+            ...r, note: cleanNote(note), note_shared: false,
+            ...cleanDetails({
+                position: keyFor(POSITIONS, cell(row, "position")),
+                tags: cell(row, "tags").split(/[;,]/).map((t) => keyFor(TAGS, t)),
+            }),
         });
     });
 
