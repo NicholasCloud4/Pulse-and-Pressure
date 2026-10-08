@@ -46,6 +46,7 @@ def parse():
     if len(note) > 500:
         return jsonify(error="That note is too long. Try one day at a time."), 400
 
+    too_slow = "The model took too long to answer. Try again in a moment."
     try:
         readings = parse_reading(note)
     except urllib.error.HTTPError:
@@ -53,10 +54,14 @@ def parse():
             error=f"Ollama replied with an error. Is the model downloaded? "
             f"Run: ollama pull {MODEL}"
         ), 503
-    except urllib.error.URLError:
+    except urllib.error.URLError as e:
+        if isinstance(e.reason, TimeoutError):
+            return jsonify(error=too_slow), 504
         return jsonify(
             error="Can't reach Ollama. Make sure it is running on the computer."
         ), 503
+    except TimeoutError:
+        return jsonify(error=too_slow), 504
     except Exception:
         return jsonify(
             error="The model gave an unexpected answer. Try rewording the note."

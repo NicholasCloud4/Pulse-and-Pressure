@@ -14,8 +14,12 @@ anywhere.
 - **Two ways to log:** a quick form (three numbers plus tap-to-pick position
   and tags) for everyday use, or a free-text note read by a local model (when
   running on your own computer with Ollama)
-- **Position and tags:** sitting / standing / lying down; medication taken,
-  stressed, after exercise, caffeine. The app remembers your usual position.
+- **Position, tags and notes:** sitting / standing / lying down; medication
+  taken, stressed, after exercise, caffeine; and an optional short note ("left
+  arm", "felt dizzy"). The app remembers your usual position.
+- **Fix mistakes:** edit any saved reading, and undo a delete for a few seconds
+  afterwards. Unusual numbers (like a top number of 300) ask you to check
+  before saving, and times in the future aren't accepted.
 - **AHA categories:** each reading is labeled using general adult ranges from
   the American Heart Association (see the table below)
 - **Crisis alert:** a reading above 180/120 shows a clear warning with what to do
@@ -25,7 +29,10 @@ anywhere.
 - **Export CSV** to bring to a doctor's appointment or keep as a backup
 - **Restore** from an exported CSV to bring back missing readings or move them
   to a new device
-- **More than one person:** each person gets their own readings
+- **Backup reminder:** once there are 10 or more readings, the app suggests an
+  export if there hasn't been one in the last 30 days
+- **More than one person:** each person gets their own readings. Tap **⋯**
+  next to the name to rename or delete a person.
 - Works on phones and computers, in light and dark mode
 
 ## Two ways to use it

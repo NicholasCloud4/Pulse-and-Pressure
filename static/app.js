@@ -3,6 +3,7 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 const FIELDS = ["systolic", "diastolic", "pulse"];
 const STATUS = { normal: "good", elevated: "warning", stage1: "serious", stage2: "critical", crisis: "critical" };
 const options = { positions: POSITIONS, tags: TAGS, categories: CATEGORIES };
+const DAY = 86400000;
 
 // Words in a typed note that pre-select a tag or position (you can still change them)
 const TAG_HINTS = {
@@ -25,6 +26,7 @@ let historyPage = 0;
 let totalReadings = 0;
 const quick = { position: null, tags: new Set(), timeTouched: false };
 const noteDetails = { position: null, tags: new Set() };
+const editDetails = { position: null, tags: new Set() };
 
 // Only used for reading notes, which needs app.py and Ollama on a computer
 async function api(path, options) {
@@ -49,15 +51,128 @@ function recall(key) {
     try { return localStorage.getItem(key); } catch (e) { return null; }
 }
 
+function forget(key) {
+    try { localStorage.removeItem(key); } catch (e) { /* storage blocked */ }
+}
+
+// el("p", "muted", "Some text")
+function el(tag, className, text) {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    if (text !== undefined) e.textContent = text;
+    return e;
+}
+
+function plural(n, word) {
+    return n === 1 ? "1 " + word : n + " " + word + "s";
+}
+
+let statusTimer = null;
 function showStatus(message, isError) {
-    const el = $("status");
-    el.textContent = message || "";
-    el.className = "status" + (isError ? " error" : "");
+    clearTimeout(statusTimer);
+    const box = $("status");
+    box.textContent = message || "";
+    box.className = "status" + (isError ? " error" : "");
+}
+
+// "Saved 128/82 · pulse 71 ● Stage 1 high", cleared after a few seconds
+function showSaved(readings) {
+    showStatus("", false);
+    const box = $("status");
+    if (readings.length === 1) {
+        const r = readings[0];
+        box.append("Saved ", el("strong", "", bpText(r)), " ", badge(categorize(r.systolic, r.diastolic)));
+    } else {
+        box.textContent = "Saved " + readings.length + " readings.";
+    }
+    box.classList.add("saved");
+    statusTimer = setTimeout(() => showStatus(""), 8000);
+}
+
+// A short message at the bottom of the screen, with an optional button like "Undo"
+let toastTimer = null;
+function toast(message, action, onAction) {
+    clearTimeout(toastTimer);
+    $("toast-text").textContent = message;
+    const button = $("toast-action");
+    button.hidden = !action;
+    button.textContent = action || "";
+    button.onclick = () => { hideToast(); onAction(); };
+    $("toast").hidden = false;
+    toastTimer = setTimeout(hideToast, Math.max(action ? 8000 : 5000, message.length * 60));
+}
+
+function hideToast() {
+    clearTimeout(toastTimer);
+    $("toast").hidden = true;
 }
 
 function savedPosition() {
     const p = recall("position");
     return p in options.positions ? p : null;
+}
+
+// ---------- Windows (dialogs) ----------
+// Opens a window. submit() runs when its form is sent: it returns a result to close with,
+// undefined to stay open, or throws to show an error. Resolves with the result, or null if cancelled.
+function openDialog(name, submit, focusOn) {
+    const dialog = $(name + "-dialog");
+    $(name + "-error").textContent = "";
+    dialog.showModal();
+    if (focusOn) focusOn.focus();
+
+    return new Promise((resolve) => {
+        let result = null;
+        $(name + "-form").onsubmit = (e) => {
+            e.preventDefault();
+            try {
+                const value = submit();
+                if (value === undefined) return;
+                result = value;
+                dialog.close();
+            } catch (err) {
+                $(name + "-error").textContent = err.message;  // e.g. the name is already taken
+            }
+        };
+        $(name + "-cancel").onclick = () => dialog.close();
+        dialog.onclick = (e) => { if (e.target === dialog) dialog.close(); };  // tap outside to cancel
+        dialog.onclose = () => resolve(result);  // also runs when Escape is pressed
+    });
+}
+
+// A yes/no question. With typeToConfirm, that word has to be typed first.
+// Resolves with true, or null if cancelled.
+function ask({ title, message, button, danger, typeToConfirm }) {
+    $("ask-title").textContent = title;
+    $("ask-message").textContent = message;
+    $("ask-ok").textContent = button;
+    $("ask-ok").classList.toggle("destructive", !!danger);
+    $("ask-type").hidden = !typeToConfirm;
+    $("ask-type-text").textContent = typeToConfirm ? "Type " + typeToConfirm + " to confirm" : "";
+    $("ask-input").value = "";
+    return openDialog("ask", () => {
+        if (typeToConfirm && $("ask-input").value.trim().toLowerCase() !== typeToConfirm.toLowerCase()) {
+            throw new Error("Type " + typeToConfirm + " to confirm.");
+        }
+        return true;
+    }, typeToConfirm ? $("ask-input") : $("ask-ok"));
+}
+
+// "These numbers look unusual" with Fix it / Save anyway, shown above the save button
+function showCheck(box, problems, saveAnyway, fixField) {
+    const list = el("ul");
+    problems.forEach((p) => list.appendChild(el("li", "", p[0].toUpperCase() + p.slice(1))));
+    const fix = el("button", "primary compact", "Fix it");
+    fix.type = "button";
+    fix.onclick = () => { box.hidden = true; fixField.focus(); };
+    const anyway = el("button", "compact", "Save anyway");
+    anyway.type = "button";
+    anyway.onclick = () => { box.hidden = true; saveAnyway(); };
+    const actions = el("div", "actions");
+    actions.append(fix, anyway);
+    box.replaceChildren(el("strong", "", "These numbers look unusual:"), list, actions);
+    box.hidden = false;
+    box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 // ---------- People ----------
@@ -77,43 +192,69 @@ function renderProfiles() {
 
     profileId = sel.value || null;
     const hasPerson = profileId !== null;
-    sel.hidden = !hasPerson;
+    $("who").hidden = !hasPerson;
     $("no-profile").hidden = hasPerson;
     $("person-view").hidden = !hasPerson;
     if (hasPerson) loadAll(true);
 }
 
-// Shows the "Add a person" window. Resolves with the new person, or null if cancelled.
-function openPersonDialog(suggestedName, message) {
-    const dialog = $("person-dialog");
-    $("person-name").value = suggestedName || "";
-    $("person-message").textContent = message || "Whose readings are these?";
-    $("person-error").textContent = "";
-    dialog.showModal();
-    $("person-name").focus();
+function setPersonDialog(title, button, name, message, canRemove) {
+    $("person-title").textContent = title;
+    $("person-ok").textContent = button;
+    $("person-name").value = name || "";
+    $("person-message").textContent = message || "";
+    $("person-message").hidden = !message;
+    $("person-remove").hidden = !canRemove;
+    $("person-delete").textContent = "Delete " + name + "…";
+}
 
-    return new Promise((resolve) => {
-        let added = null;
-        $("person-form").onsubmit = (e) => {
-            e.preventDefault();
-            try {
-                added = addProfile($("person-name").value);
-                dialog.close();
-            } catch (err) {
-                $("person-error").textContent = err.message;  // e.g. the name is already taken
-                $("person-name").focus();
-            }
-        };
-        $("person-cancel").onclick = () => dialog.close();
-        dialog.onclick = (e) => { if (e.target === dialog) dialog.close(); };  // tap outside to cancel
-        dialog.onclose = () => {  // also runs when Escape is pressed
-            if (added) {
-                store("profileId", added.id);
-                renderProfiles();
-            }
-            resolve(added);
-        };
+// Shows the "Add a person" window. Resolves with the new person, or null if cancelled.
+async function openPersonDialog(suggestedName, message) {
+    setPersonDialog("Add a person", "Add person", suggestedName, message || "Whose readings are these?", false);
+    const added = await openDialog("person", () => addProfile($("person-name").value), $("person-name"));
+    if (added) {
+        store("profileId", added.id);
+        renderProfiles();
+    }
+    return added;
+}
+
+async function editPerson() {
+    setPersonDialog("Edit person", "Save", profileName(profileId), "", true);
+    let remove = false;
+    $("person-delete").onclick = () => { remove = true; $("person-dialog").close(); };
+    const renamed = await openDialog("person", () => renameProfile(profileId, $("person-name").value), $("person-name"));
+    if (renamed) {
+        renderProfiles();
+        toast("Renamed to " + renamed + ".");
+    }
+    if (remove) await deletePerson();
+}
+
+async function deletePerson() {
+    const name = profileName(profileId);
+    const count = readingsFor(profileId).length;
+    const sure = await ask({
+        title: "Delete " + name + "?",
+        message: "This deletes " + name + " and " + plural(count, "reading") + " from this device, and it "
+            + "can't be undone. If you might want them later, export a CSV first.",
+        button: "Delete",
+        danger: true,
+        typeToConfirm: name,
     });
+    if (!sure) return;
+    try {
+        deleteProfile(profileId);
+    } catch (e) {
+        toast(e.message);
+        return;
+    }
+    ["lastExport:", "backupSnooze:"].forEach((key) => forget(key + profileId));
+    forget("profileId");
+    cancelDraft();
+    $("crisis").hidden = true;
+    renderProfiles();
+    toast("Deleted " + name + ".");
 }
 
 // ---------- Position and tags ----------
@@ -155,24 +296,28 @@ function detailsOf(state) {
     return { position: state.position, tags: [...state.tags] };
 }
 
-// ---------- Saving (shared by both ways of logging) ----------
-function saveReadings(readings, extra) {
+// The unusual-looking numbers in some readings, numbered when there's more than one
+function problemsIn(readings) {
     const problems = [];
-    readings.forEach((r, i) => looksPlausible(r).forEach((p) => problems.push("Reading " + (i + 1) + ": " + p)));
-    if (problems.length && !confirm("These look unusual:\n\n" + problems.join("\n") + "\n\nSave anyway?")) {
-        return null;
-    }
+    readings.forEach((r, i) => looksPlausible(r).forEach((p) => {
+        problems.push(readings.length > 1 ? "Reading " + (i + 1) + ": " + p : p);
+    }));
+    return problems;
+}
+
+// ---------- Saving (shared by both ways of logging) ----------
+function saveReadings(readings, extra, showError) {
     try {
         return addReadings(profileId, readings, extra);
     } catch (e) {
-        alert(e.message);
+        showError(e.message);
         return null;
     }
 }
 
 function afterSave(result, position) {
     if (position) store("position", position);
-    showStatus("Saved.", false);
+    showSaved(result.readings);
     $("crisis").hidden = !result.crisis;
     if (result.crisis) $("crisis").scrollIntoView({ behavior: "smooth", block: "start" });
     loadAll(true);  // back to the newest readings
@@ -182,9 +327,10 @@ function afterSave(result, position) {
 function resetQuickTime() {
     quick.timeTouched = false;
     $("q-when").value = nowLocal();
+    $("q-when").max = nowLocal();
 }
 
-function saveQuick() {
+function saveQuick(force) {
     const reading = {};
     FIELDS.forEach((key) => {
         const v = $("q-" + key).value;
@@ -197,9 +343,18 @@ function saveQuick() {
     // An untouched time means "now"
     reading.taken_at = quick.timeTouched ? $("q-when").value : null;
 
-    const result = saveReadings([reading], detailsOf(quick));
+    const problems = problemsIn([reading]);
+    if (problems.length && force !== true) {
+        showStatus("", false);
+        showCheck($("q-check"), problems, () => saveQuick(true), $("q-systolic"));
+        return;
+    }
+    $("q-check").hidden = true;
+    const result = saveReadings([reading], { note: $("q-note").value, ...detailsOf(quick) },
+        (message) => showStatus(message, true));
     if (!result) return;
     FIELDS.forEach((key) => { $("q-" + key).value = ""; });
+    $("q-note").value = "";
     quick.tags.clear();  // the position is kept for next time; tags are per reading
     renderDetails($("q-details"), quick);
     resetQuickTime();
@@ -297,6 +452,7 @@ function rowEl(r, i) {
     const when = document.createElement("input");
     when.type = "datetime-local";
     when.value = r.taken_at;
+    when.max = nowLocal();
     when.oninput = () => { r.taken_at = when.value; };
     whenLabel.appendChild(when);
 
@@ -310,6 +466,8 @@ function renderDraft() {
     draft.forEach((r, i) => box.appendChild(rowEl(r, i)));
     $("empty-msg").hidden = draft.length > 0;
     $("save").disabled = draft.length === 0;
+    $("n-check").hidden = true;
+    $("n-error").textContent = "";
     $("confirm").hidden = false;
     $("confirm").scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -319,9 +477,17 @@ function cancelDraft() {
     $("confirm").hidden = true;
 }
 
-function saveDraft() {
+function saveDraft(force) {
     const readings = draft.map((r) => ({ systolic: r.systolic, diastolic: r.diastolic, pulse: r.pulse, taken_at: r.taken_at }));
-    const result = saveReadings(readings, { note: $("note").value.trim(), ...detailsOf(noteDetails) });
+    const problems = problemsIn(readings);
+    if (problems.length && force !== true) {
+        showCheck($("n-check"), problems, () => saveDraft(true), $("rows").querySelector("input") || $("save"));
+        return;
+    }
+    $("n-check").hidden = true;
+    $("n-error").textContent = "";
+    const result = saveReadings(readings, { note: $("note").value.trim(), ...detailsOf(noteDetails) },
+        (message) => { $("n-error").textContent = message; });
     if (!result) return;
     $("note").value = "";
     cancelDraft();
@@ -364,6 +530,7 @@ function loadAll(resetPage) {
     chartData = readings.slice(0, 20).reverse();
     renderChart();
     $("export").hidden = totalReadings === 0;
+    renderBackupNudge();
     loadHistory();
 }
 
@@ -401,7 +568,7 @@ function renderStats(periods) {
         pulse.textContent = p.pulse !== null ? "pulse " + p.pulse : "";
         const count = document.createElement("div");
         count.className = "muted";
-        count.textContent = p.count === 1 ? "1 reading" : p.count + " readings";
+        count.textContent = plural(p.count, "reading");
         tile.append(label, value, pulse, badge(p.category), count);
         box.appendChild(tile);
     });
@@ -429,21 +596,95 @@ function renderHistory(readings) {
         when.className = "muted";
         when.textContent = extra.join(" · ");
         text.append(line, when);
+        if (r.note) text.appendChild(el("div", "note", r.note));
 
-        const del = document.createElement("button");
+        const edit = el("button", "link", "Edit");
+        edit.type = "button";
+        edit.setAttribute("aria-label", "Edit " + bpText(r) + ", " + whenText(r.taken_at));
+        edit.onclick = () => editReading(r);
+        const del = el("button", "link danger", "Delete");
         del.type = "button";
-        del.className = "link danger";
-        del.textContent = "Delete";
-        del.onclick = () => {
-            if (!confirm("Delete this reading?")) return;
-            try {
-                deleteReading(r.id);
-                loadAll();
-            } catch (e) { alert(e.message); }
-        };
-        li.append(text, del);
+        del.setAttribute("aria-label", "Delete " + bpText(r) + ", " + whenText(r.taken_at));
+        del.onclick = () => removeReading(r);
+        const actions = el("div", "row-actions");
+        actions.append(edit, del);
+        li.append(text, actions);
         ul.appendChild(li);
     });
+}
+
+// Deletes straight away, with a few seconds to undo
+function removeReading(r) {
+    let removed;
+    try {
+        removed = deleteReading(r.id);
+    } catch (e) {
+        toast(e.message);
+        return;
+    }
+    loadAll();
+    if (!removed) return;
+    toast("Deleted " + bpText(r) + ".", "Undo", () => {
+        try {
+            undoDelete(removed);
+            loadAll();
+        } catch (e) { toast(e.message); }
+    });
+}
+
+async function editReading(r) {
+    FIELDS.forEach((key) => { $("e-" + key).value = r[key] ?? ""; });
+    $("e-when").value = r.taken_at;
+    $("e-when").max = nowLocal();
+    $("e-note").value = r.note || "";
+    editDetails.position = r.position;
+    editDetails.tags = new Set(r.tags);
+    renderDetails($("e-details"), editDetails);
+    $("e-check").hidden = true;
+
+    let force = false;
+    const saved = await openDialog("edit", () => {
+        const reading = { taken_at: $("e-when").value };
+        FIELDS.forEach((key) => {
+            const v = $("e-" + key).value;
+            reading[key] = v === "" ? null : parseInt(v, 10);
+        });
+        const problems = problemsIn([reading]);
+        if (problems.length && !force) {
+            showCheck($("e-check"), problems, () => { force = true; $("edit-form").requestSubmit(); }, $("e-systolic"));
+            return undefined;
+        }
+        try {
+            updateReading(r.id, reading, { note: $("e-note").value, ...detailsOf(editDetails) });
+        } finally {
+            force = false;
+        }
+        return true;
+    }, $("e-systolic"));
+    if (saved) {
+        loadAll();
+        toast("Reading updated.");
+    }
+}
+
+// ---------- Backup reminder ----------
+// Shown once there's a fair amount to lose and no recent export
+function renderBackupNudge() {
+    const last = recall("lastExport:" + profileId);
+    const snoozedUntil = recall("backupSnooze:" + profileId);
+    const days = last ? Math.floor((Date.now() - new Date(last)) / DAY) : null;
+    const due = totalReadings >= 10 && (days === null || days >= 30) && !(snoozedUntil && snoozedUntil > nowLocal());
+    $("backup-nudge").hidden = !due;
+    if (!due) return;
+    $("backup-text").textContent = (days === null
+        ? "These " + totalReadings + " readings are only saved in this browser, and there's no copy yet."
+        : "The last export was " + days + " days ago.")
+        + " Clearing the browser's data would delete them. Export a CSV file and keep it somewhere safe.";
+}
+
+function snoozeBackup() {
+    store("backupSnooze:" + profileId, toLocalIso(Date.now() + 7 * DAY));
+    $("backup-nudge").hidden = true;
 }
 
 // ---------- Export and restore ----------
@@ -457,6 +698,9 @@ function downloadCsv() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    store("lastExport:" + profileId, nowLocal());
+    $("backup-nudge").hidden = true;
+    toast("Downloaded " + a.download + ". Keep it somewhere safe.");
 }
 
 // "pulse-pressure-Nicholas-2026-10-03 (2).csv" -> "Nicholas"
@@ -470,7 +714,7 @@ async function restoreFile(file) {
     try {
         text = await file.text();
     } catch (e) {
-        alert("Couldn't open that file.");
+        toast("Couldn't open that file.");
         return;
     }
     const fileName = nameFromFile(file.name);
@@ -478,48 +722,73 @@ async function restoreFile(file) {
         && !(await openPersonDialog(fileName, "Whose readings are in " + file.name + "?"))) return;
     const who = profileName(profileId);
     if (fileName && fileName.toLowerCase() !== who.toLowerCase()
-        && !confirm("This file looks like " + fileName + "'s readings. Add them to " + who + "?")) {
+        && !(await ask({
+            title: "Add them to " + who + "?",
+            message: "This file looks like " + fileName + "'s readings.",
+            button: "Add to " + who,
+        }))) {
         return;
     }
     try {
         const { added, skipped, unreadable } = importCsv(profileId, text);
-        const lines = [added === 1 ? "Restored 1 reading for " + who + "." : "Restored " + added + " readings for " + who + "."];
+        const lines = ["Restored " + plural(added, "reading") + " for " + who + "."];
         if (skipped) lines.push(skipped + (skipped === 1 ? " was" : " were") + " already on this device.");
-        if (unreadable) lines.push(unreadable + (unreadable === 1 ? " row" : " rows") + " couldn't be read and " + (unreadable === 1 ? "was" : "were") + " skipped.");
+        if (unreadable) lines.push(plural(unreadable, "row") + " couldn't be read and " + (unreadable === 1 ? "was" : "were") + " skipped.");
         loadAll(true);
-        alert(lines.join("\n"));
+        toast(lines.join("\n"));
     } catch (e) {
-        alert(e.message);
+        toast(e.message);
     }
 }
 
 // ---------- Wire it up ----------
 $("tab-quick").onclick = () => setMode("quick");
 $("tab-note").onclick = () => setMode("note");
-$("q-save").onclick = saveQuick;
-FIELDS.forEach((key) => {
+$("q-save").onclick = () => saveQuick();
+FIELDS.concat("note").forEach((key) => {
     $("q-" + key).onkeydown = (e) => { if (e.key === "Enter") saveQuick(); };
 });
 $("q-when").oninput = () => { quick.timeTouched = true; };
+$("quick-mode").addEventListener("input", () => { $("q-check").hidden = true; });  // numbers changed: check again on save
 $("read").onclick = readNote;
-$("save").onclick = saveDraft;
+$("save").onclick = () => saveDraft();
 $("cancel").onclick = cancelDraft;
+$("rows").addEventListener("input", () => { $("n-check").hidden = true; });
+$("edit-form").addEventListener("input", () => { $("e-check").hidden = true; });
 $("add-row").onclick = () => {
     draft.push({ systolic: null, diastolic: null, pulse: null, problems: [], taken_at: nowLocal() });
     renderDraft();
 };
 $("crisis-close").onclick = () => { $("crisis").hidden = true; };
 $("add-profile").onclick = () => openPersonDialog();
+$("edit-profile").onclick = editPerson;
+$("welcome-form").onsubmit = (e) => {
+    e.preventDefault();
+    try {
+        const added = addProfile($("welcome-name").value);
+        store("profileId", added.id);
+        $("welcome-name").value = "";
+        $("welcome-error").textContent = "";
+        renderProfiles();
+        $("q-systolic").focus();
+    } catch (err) {
+        $("welcome-error").textContent = err.message;
+    }
+};
 $("profile").onchange = () => {
     profileId = $("profile").value;
     store("profileId", profileId);
     cancelDraft();
+    showStatus("", false);
+    $("q-check").hidden = true;
     $("crisis").hidden = true;
     loadAll(true);
 };
 $("newer").onclick = () => turnPage(-1);
 $("older").onclick = () => turnPage(1);
 $("export").onclick = downloadCsv;
+$("nudge-export").onclick = downloadCsv;
+$("nudge-later").onclick = snoozeBackup;
 document.querySelectorAll(".restore").forEach((b) => { b.onclick = () => $("restore-file").click(); });
 $("restore-file").onchange = async () => {
     const file = $("restore-file").files[0];
@@ -528,7 +797,10 @@ $("restore-file").onchange = async () => {
 };
 window.addEventListener("resize", renderChart);
 // Keep the quick-entry time current while the page sits open
-setInterval(() => { if (!quick.timeTouched) $("q-when").value = nowLocal(); }, 30000);
+setInterval(() => {
+    $("q-when").max = nowLocal();
+    if (!quick.timeTouched) $("q-when").value = nowLocal();
+}, 30000);
 
 function start() {
     try {

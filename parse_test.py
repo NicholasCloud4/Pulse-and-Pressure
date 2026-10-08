@@ -4,6 +4,10 @@ import urllib.request
 # Change this one line to try a different model (e.g. "qwen2.5:7b")
 MODEL = "llama3.2:3b"
 
+# Seconds to wait for Ollama. The first note after a restart also loads the
+# model, which can take a while on a computer without a graphics card.
+TIMEOUT = 120
+
 # One reading = systolic, diastolic, pulse (any of them can be null)
 READING = {
     "type": "object",
@@ -82,7 +86,7 @@ def parse_reading(note):
         data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req) as resp:
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
         content = json.loads(json.loads(resp.read())["message"]["content"])
 
     # Plain-code cleanup: drop "readings" where the model found nothing at all
@@ -101,17 +105,17 @@ def looks_plausible(r):
     """Return a list of problems; empty list means the reading looks sane."""
     problems = []
     if r["systolic"] is not None and not 70 <= r["systolic"] <= 250:
-        problems.append("systolic out of range")
+        problems.append(f"the top number ({r['systolic']}) is outside the usual 70 to 250")
     if r["diastolic"] is not None and not 40 <= r["diastolic"] <= 150:
-        problems.append("diastolic out of range")
+        problems.append(f"the bottom number ({r['diastolic']}) is outside the usual 40 to 150")
     if r["pulse"] is not None and not 30 <= r["pulse"] <= 220:
-        problems.append("pulse out of range")
+        problems.append(f"the pulse ({r['pulse']}) is outside the usual 30 to 220")
     if (
         r["systolic"] is not None
         and r["diastolic"] is not None
         and r["systolic"] <= r["diastolic"]
     ):
-        problems.append("systolic should be higher than diastolic")
+        problems.append("the top number should be higher than the bottom number")
     return problems
 
 

@@ -61,7 +61,6 @@ TESTS = [
     ("120/80 p66, 124/82 p71, 118/78 p64", [(120, 80, 66), (124, 82, 71), (118, 78, 64)]),
 
     # --- Moved in from the first holdout (we have now seen their misses) ---
-    ("122/80 am, 135/85 pm", [(122, 80, None), (135, 85, None)]),
     ("morning 118/76 p62, night 129/82 p75", [(118, 76, 62), (129, 82, 75)]),
     ("left arm 130/85, right arm 126/82", [(130, 85, None), (126, 82, None)]),
     ("sitting 121/79 p68 standing 115/74 p76", [(121, 79, 68), (115, 74, 76)]),

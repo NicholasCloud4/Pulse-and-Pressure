@@ -34,11 +34,17 @@ function categorize(systolic, diastolic) {
 // Same rules as looks_plausible() in parse_test.py
 function looksPlausible(r) {
     const problems = [];
-    if (r.systolic !== null && !(r.systolic >= 70 && r.systolic <= 250)) problems.push("systolic out of range");
-    if (r.diastolic !== null && !(r.diastolic >= 40 && r.diastolic <= 150)) problems.push("diastolic out of range");
-    if (r.pulse !== null && !(r.pulse >= 30 && r.pulse <= 220)) problems.push("pulse out of range");
+    if (r.systolic !== null && !(r.systolic >= 70 && r.systolic <= 250)) {
+        problems.push("the top number (" + r.systolic + ") is outside the usual 70 to 250");
+    }
+    if (r.diastolic !== null && !(r.diastolic >= 40 && r.diastolic <= 150)) {
+        problems.push("the bottom number (" + r.diastolic + ") is outside the usual 40 to 150");
+    }
+    if (r.pulse !== null && !(r.pulse >= 30 && r.pulse <= 220)) {
+        problems.push("the pulse (" + r.pulse + ") is outside the usual 30 to 220");
+    }
     if (r.systolic !== null && r.diastolic !== null && r.systolic <= r.diastolic) {
-        problems.push("systolic should be higher than diastolic");
+        problems.push("the top number should be higher than the bottom number");
     }
     return problems;
 }
@@ -100,15 +106,34 @@ function listProfiles() {
     return data.profiles;
 }
 
-function addProfile(name) {
+// A trimmed name, or an error if it's empty, too long, or another person's name
+function checkName(name, exceptId) {
     name = (name || "").trim();
     if (!name || name.length > 40) throw new Error("Enter a name (up to 40 characters).");
-    if (data.profiles.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
+    if (data.profiles.some((p) => p.id !== exceptId && p.name.toLowerCase() === name.toLowerCase())) {
         throw new Error("That name already exists.");
     }
-    const profile = { id: newId(), name };
+    return name;
+}
+
+function addProfile(name) {
+    const profile = { id: newId(), name: checkName(name) };
     commit((d) => d.profiles.push(profile));
     return profile;
+}
+
+function renameProfile(profileId, name) {
+    name = checkName(name, profileId);
+    commit((d) => { d.profiles.find((p) => p.id === profileId).name = name; });
+    return name;
+}
+
+// Removes the person and all of their readings
+function deleteProfile(profileId) {
+    commit((d) => {
+        d.profiles = d.profiles.filter((p) => p.id !== profileId);
+        d.readings = d.readings.filter((r) => r.profile_id !== profileId);
+    });
 }
 
 function profileName(profileId) {
@@ -121,8 +146,10 @@ function cleanNumber(v) {
     return Number.isInteger(v) ? v : null;
 }
 
+const VALID_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+
 function cleanTime(value) {
-    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value || "") ? value.slice(0, 16) : nowLocal();
+    return VALID_TIME.test(value || "") ? value.slice(0, 16) : nowLocal();
 }
 
 function cleanDetails(extra) {
@@ -131,30 +158,69 @@ function cleanDetails(extra) {
     return { position, tags };
 }
 
+function cleanNote(note) {
+    return String(note || "").trim().slice(0, 500);
+}
+
+// The numbers and time of a reading, or an error saying what's wrong
+function cleanValues(r, which) {
+    const values = {
+        taken_at: cleanTime(r.taken_at),
+        systolic: cleanNumber(r.systolic), diastolic: cleanNumber(r.diastolic), pulse: cleanNumber(r.pulse),
+    };
+    if (values.systolic === null && values.diastolic === null && values.pulse === null) {
+        throw new Error(which + " is empty.");
+    }
+    // A mistyped future date would sit at the top of the history forever
+    if (values.taken_at > nowLocal()) {
+        throw new Error(which + " has a time in the future. Check the date and time.");
+    }
+    return values;
+}
+
 // Save one or more readings. Readings saved together share a batch id,
 // so the CSV export can tell a note that held several readings.
 function addReadings(profileId, readings, extra) {
     const batch = newId();
     const { position, tags } = cleanDetails(extra);
-    const note = String(extra.note || "").slice(0, 500);
-    const cleaned = readings.map((r, i) => {
-        const item = {
-            id: newId(), profile_id: profileId, batch,
-            taken_at: cleanTime(r.taken_at),
-            systolic: cleanNumber(r.systolic), diastolic: cleanNumber(r.diastolic), pulse: cleanNumber(r.pulse),
-            position, tags, note,
-        };
-        if (item.systolic === null && item.diastolic === null && item.pulse === null) {
-            throw new Error("Reading " + (i + 1) + " is empty.");
-        }
-        return item;
-    });
+    const note = cleanNote(extra.note);
+    const cleaned = readings.map((r, i) => ({
+        id: newId(), profile_id: profileId, batch,
+        ...cleanValues(r, readings.length === 1 ? "The reading" : "Reading " + (i + 1)),
+        position, tags, note,
+    }));
     commit((d) => d.readings.push(...cleaned));
-    return { saved: cleaned.length, crisis: cleaned.some((r) => categorize(r.systolic, r.diastolic) === "crisis") };
+    return {
+        saved: cleaned.length,
+        readings: cleaned,
+        crisis: cleaned.some((r) => categorize(r.systolic, r.diastolic) === "crisis"),
+    };
 }
 
+// Change a saved reading's numbers, time, position, tags and note
+function updateReading(id, reading, extra) {
+    if (!VALID_TIME.test(reading.taken_at || "")) throw new Error("Enter a date and time.");
+    const changes = { ...cleanValues(reading, "The reading"), ...cleanDetails(extra), note: cleanNote(extra.note) };
+    commit((d) => {
+        const r = d.readings.find((x) => x.id === id);
+        if (!r) return;
+        // A note written for this reading alone is exported with it, so it leaves its batch
+        if (changes.note !== r.note) r.batch = newId();
+        Object.assign(r, changes);
+    });
+}
+
+// Returns what was removed, so it can be put back with undoDelete()
 function deleteReading(id) {
-    commit((d) => { d.readings = d.readings.filter((r) => r.id !== id); });
+    const index = data.readings.findIndex((r) => r.id === id);
+    if (index === -1) return null;
+    const removed = { reading: data.readings[index], index };
+    commit((d) => d.readings.splice(index, 1));
+    return removed;
+}
+
+function undoDelete(removed) {
+    commit((d) => d.readings.splice(Math.min(removed.index, d.readings.length), 0, removed.reading));
 }
 
 // A person's readings, newest first, each with its category

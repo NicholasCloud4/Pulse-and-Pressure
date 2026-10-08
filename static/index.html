@@ -4,6 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
     <title>Pulse &amp; Pressure</title>
     <link rel="icon"
         href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9D%A4%EF%B8%8F%3C/text%3E%3C/svg%3E">
@@ -14,8 +15,10 @@
     <main>
         <div class="top">
             <h1>Pulse &amp; Pressure</h1>
-            <div class="who">
+            <div id="who" class="who" hidden>
                 <select id="profile" aria-label="Whose readings"></select>
+                <button id="edit-profile" class="small" type="button" aria-label="Rename or remove this person"
+                    title="Rename or remove this person">&#8943;</button>
                 <button id="add-profile" class="small" type="button" aria-label="Add a person"
                     title="Add a person">+</button>
             </div>
@@ -24,7 +27,17 @@
         <p id="storage-error" class="card status error" role="alert" hidden></p>
 
         <section id="no-profile" class="card" hidden>
-            <p>Tap <strong>+</strong> to add a person and get started.</p>
+            <h2>Welcome</h2>
+            <p>Log blood pressure and pulse readings in a few taps. Everything stays in this browser, on this
+                device.</p>
+            <form id="welcome-form" novalidate>
+                <label>Whose readings will you log?<input id="welcome-name" type="text" maxlength="40"
+                        autocomplete="off" autocapitalize="words" enterkeyhint="go" placeholder="Name"></label>
+                <p id="welcome-error" class="status error" role="alert"></p>
+                <div class="actions">
+                    <button class="primary" type="submit">Get started</button>
+                </div>
+            </form>
             <p class="muted">Already have readings in an exported file? Restore them onto this device.</p>
             <button class="restore compact" type="button">Restore from file</button>
         </section>
@@ -61,7 +74,10 @@
                         <label>Pulse<input id="q-pulse" type="number" inputmode="numeric" min="0" step="1"></label>
                     </div>
                     <label>When<input id="q-when" type="datetime-local"></label>
+                    <label class="spaced">Note (optional)<input id="q-note" type="text" maxlength="200"
+                            autocomplete="off" placeholder="Like: left arm, felt dizzy"></label>
                     <div id="q-details" class="details"></div>
+                    <div id="q-check" class="check" role="alert" hidden></div>
                     <div class="actions">
                         <button id="q-save" class="primary" type="button">Save reading</button>
                     </div>
@@ -88,9 +104,20 @@
                     <button id="add-row" type="button">+ Add a reading</button>
                 </div>
                 <div id="n-details" class="details"></div>
+                <div id="n-check" class="check" role="alert" hidden></div>
+                <p id="n-error" class="status error" role="alert"></p>
                 <div class="actions">
                     <button id="save" class="primary" type="button">Save</button>
                     <button id="cancel" type="button">Cancel</button>
+                </div>
+            </section>
+
+            <section id="backup-nudge" class="card nudge" hidden>
+                <h2>Back up your readings</h2>
+                <p id="backup-text"></p>
+                <div class="actions">
+                    <button id="nudge-export" class="primary compact" type="button">Export CSV</button>
+                    <button id="nudge-later" class="compact" type="button">Not now</button>
                 </div>
             </section>
 
@@ -151,11 +178,56 @@
                     autocapitalize="words" enterkeyhint="done"></label>
             <p id="person-error" class="status error" role="alert"></p>
             <div class="actions">
-                <button class="primary" type="submit">Add person</button>
+                <button id="person-ok" class="primary" type="submit">Add person</button>
                 <button id="person-cancel" type="button">Cancel</button>
+            </div>
+            <div id="person-remove" class="remove-area" hidden>
+                <button id="person-delete" class="link danger" type="button">Delete this person</button>
             </div>
         </form>
     </dialog>
+
+    <dialog id="edit-dialog" aria-labelledby="edit-title">
+        <form id="edit-form" novalidate>
+            <h2 id="edit-title">Edit reading</h2>
+            <div class="grid">
+                <label>Top (systolic)<input id="e-systolic" type="number" inputmode="numeric" min="0"
+                        step="1"></label>
+                <label>Bottom (diastolic)<input id="e-diastolic" type="number" inputmode="numeric" min="0"
+                        step="1"></label>
+                <label>Pulse<input id="e-pulse" type="number" inputmode="numeric" min="0" step="1"></label>
+            </div>
+            <label>When<input id="e-when" type="datetime-local"></label>
+            <label class="spaced">Note (optional)<input id="e-note" type="text" maxlength="500"
+                    autocomplete="off"></label>
+            <div id="e-details" class="details"></div>
+            <div id="e-check" class="check" role="alert" hidden></div>
+            <p id="edit-error" class="status error" role="alert"></p>
+            <div class="actions">
+                <button class="primary" type="submit">Save changes</button>
+                <button id="edit-cancel" type="button">Cancel</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="ask-dialog" aria-labelledby="ask-title">
+        <form id="ask-form" novalidate>
+            <h2 id="ask-title"></h2>
+            <p id="ask-message"></p>
+            <label id="ask-type" hidden><span id="ask-type-text"></span><input id="ask-input" type="text"
+                    autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+            <p id="ask-error" class="status error" role="alert"></p>
+            <div class="actions">
+                <button id="ask-ok" class="primary" type="submit"></button>
+                <button id="ask-cancel" type="button">Cancel</button>
+            </div>
+        </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden>
+        <span id="toast-text"></span>
+        <button id="toast-action" class="link" type="button" hidden></button>
+    </div>
 
     <input id="restore-file" type="file" accept=".csv,text/csv" hidden>
 
