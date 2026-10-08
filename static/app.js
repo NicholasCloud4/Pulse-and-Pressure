@@ -951,6 +951,10 @@ function buildReport(days) {
                 r.tags.map((t) => TAGS[t]).filter(Boolean).join(", "),
                 r.note_shared ? "" : r.note,  // a note typed with several readings only repeats their numbers
             ])),
+        el("h2", "", "How readings are categorized"),
+        tableEl(["Category (American Heart Association, 2025)", "Top (systolic)", "", "Bottom (diastolic)"], CATEGORY_RANGES),
+        el("p", "report-line", "When the two numbers fall in different categories, the higher category is used. "
+            + "A reading needs both numbers to get a category."),
         el("p", "report-foot", "Categories use general American Heart Association ranges for adults; the "
             + "doctor may set different targets. Logged at home with Pulse & Pressure. This is a log, not a diagnosis."),
     );

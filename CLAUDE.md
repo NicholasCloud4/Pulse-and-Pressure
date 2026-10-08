@@ -95,6 +95,12 @@ localStorage keys, set through `store()` and `recall()` in `app.js`.
   and friendly ("top number", not "systolic out of range"), never alarming except the
   crisis card, and never diagnostic. Categories are AHA general adult ranges and are
   always labeled as such.
+- **Medical wording follows the AHA's 2025 guidance.** The top range is "Severe
+  hypertension", not "hypertensive crisis"; the internal key is still `crisis`. The
+  alert for readings above 180/120 says to call 911 straight away if there are
+  symptoms, and otherwise to wait at least 1 minute, measure again, and contact the
+  doctor. heart.org blocks automated fetches, so check any change to this wording
+  against heart.org with the user rather than from memory.
 - **No browser popups:** use the in-app helpers in `app.js` (`openDialog`, `ask`,
   `toast`, `showCheck`, `showStatus`) instead of `alert`/`confirm`/`prompt`.
 - **Accessibility and phones:** tap targets at least 44px, a text label beside every

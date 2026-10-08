@@ -52,7 +52,7 @@ export default async function report({ js, check, shot, save, send, navigate, re
         chart: r.querySelectorAll(".report-chart circle").length > 0, avgRows: [...(r.querySelectorAll("table")[0]?.querySelectorAll("tbody tr") || [])].map((tr) => tr.cells[0].textContent),
         sharedNoteHidden: !r.textContent.includes("124/80 then"), walkNote: r.textContent.includes("after a walk") };`);
     check("report is built and print is called", rep.printed && rep.h1 === "Blood pressure and pulse log" && !!rep.meta?.includes("Ann Smith"), rep);
-    check("report has averages incl. mornings/evenings, chart and readings table", rep.tables === 2 && rep.rows > 20 && rep.chart && rep.avgRows.length === 3, rep);
+    check("report has averages incl. mornings/evenings, chart and readings table", rep.tables === 3 && rep.rows > 20 && rep.chart && rep.avgRows.length === 3, rep);
     check("report hides the shared note but keeps single notes", rep.sharedNoteHidden && rep.walkNote, rep);
     check("report is hidden on screen", await js(`return getComputedStyle(document.getElementById("report")).display === "none"`));
 

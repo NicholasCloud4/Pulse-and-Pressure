@@ -31,7 +31,10 @@ anywhere.
   before saving, and times in the future aren't accepted.
 - **AHA categories:** each reading is labeled using general adult ranges from
   the American Heart Association (see the table below)
-- **Crisis alert:** a reading above 180/120 shows a clear warning with what to do
+- **Severe reading alert:** a reading above 180/120 shows what to do, following
+  the AHA's 2025 guidance: call 911 right away if there are symptoms;
+  otherwise wait at least a minute, measure again, and contact the doctor if
+  it's still that high
 - **Trend chart:** systolic, diastolic and pulse over the last 7, 30 or 90 days
   or all time, spaced by date, with dashed lines at 130 and 80 where the high
   range starts
@@ -145,8 +148,10 @@ only `static/` is deployed, `app.py` and the parser files never run on Vercel.
 
 ## Blood pressure categories
 
-General adult ranges from the American Heart Association. Your doctor may set
-different targets for you.
+General adult ranges from the American Heart Association (2025). Your doctor may
+set different targets for you. The app shortens "hypertension" to "high" for
+the two stages, so the labels fit on a phone; the printed report gives the
+full AHA names.
 
 | Category            | Top (systolic)  |        | Bottom (diastolic) |
 | ------------------- | --------------- | ------ | ------------------ |
@@ -154,9 +159,16 @@ different targets for you.
 | Elevated            | 120 to 129      | and    | under 80           |
 | Stage 1 high        | 130 to 139      | or     | 80 to 89           |
 | Stage 2 high        | 140 or higher   | or     | 90 or higher       |
-| Hypertensive crisis | higher than 180 | and/or | higher than 120    |
+| Severe hypertension | higher than 180 | and/or | higher than 120    |
 
-A reading needs both the top and bottom number to get a category.
+When the two numbers fall in different categories, the higher one is used. A
+reading needs both the top and bottom number to get a category.
+
+Since 2025 the AHA no longer uses "hypertensive crisis" for the top range. It
+says **severe hypertension** for a reading above 180/120 without symptoms, and
+**hypertensive emergency** when there are also symptoms such as chest pain,
+shortness of breath, back pain, numbness, weakness, a change in vision or
+trouble speaking. The app can't know about symptoms, so its alert covers both.
 
 ## How it works
 
@@ -222,5 +234,5 @@ the app always shows what it read and asks for confirmation before saving.
 ## Not medical advice
 
 This is a logging tool. It does not diagnose anything. If you have very high
-readings or symptoms like chest pain or severe headache, contact a doctor or
+readings or symptoms like chest pain or shortness of breath, contact a doctor or
 emergency services.

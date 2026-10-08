@@ -10,14 +10,26 @@ const TAGS = {
     caffeine: "Caffeine",
 };
 
-// General American Heart Association adult ranges. A label, not a diagnosis.
+// General American Heart Association adult ranges (2025). A label, not a diagnosis.
+// AHA calls the top range "severe hypertension", and "hypertensive emergency" when
+// there are symptoms too; the app can't know about symptoms, so the alert covers both.
+// The key "crisis" is the older name, kept so saved preferences and code stay stable.
 const CATEGORIES = {
     normal: "Normal",
     elevated: "Elevated",
     stage1: "Stage 1 high",
     stage2: "Stage 2 high",
-    crisis: "Hypertensive crisis",
+    crisis: "Severe hypertension",
 };
+
+// The AHA names and ranges, as printed on the doctor report
+const CATEGORY_RANGES = [
+    ["Normal", "Less than 120", "and", "Less than 80"],
+    ["Elevated", "120 to 129", "and", "Less than 80"],
+    ["Stage 1 hypertension (Stage 1 high)", "130 to 139", "or", "80 to 89"],
+    ["Stage 2 hypertension (Stage 2 high)", "140 or higher", "or", "90 or higher"],
+    ["Severe hypertension", "Higher than 180", "and/or", "Higher than 120"],
+];
 
 const DATA_KEY = "pulse-pressure-data";
 // Raise this when the saved format changes, and add a step to upgradeData()
