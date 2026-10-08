@@ -163,6 +163,43 @@ function profileName(profileId) {
     return p ? p.name : "";
 }
 
+// ---------- Personal targets ----------
+// A goal the person's doctor gave, like "under 130/80". Both empty means no target.
+function cleanTarget(systolic, diastolic) {
+    if (systolic === null && diastolic === null) return null;
+    if (!Number.isInteger(systolic) || !Number.isInteger(diastolic)) {
+        throw new Error("Enter both target numbers, or leave both empty.");
+    }
+    if (systolic < 90 || systolic > 200 || diastolic < 50 || diastolic > 130 || systolic <= diastolic) {
+        throw new Error("That target doesn't look right. Check both numbers.");
+    }
+    return { systolic, diastolic };
+}
+
+function setTarget(profileId, target) {
+    commit((d) => {
+        const p = d.profiles.find((x) => x.id === profileId);
+        if (target) p.target = target; else delete p.target;
+    });
+}
+
+function targetFor(profileId) {
+    const p = data.profiles.find((x) => x.id === profileId);
+    return p && p.target ? p.target : null;
+}
+
+// A reading is on target when both numbers are under the target's
+function isOnTarget(r, target) {
+    return r.systolic < target.systolic && r.diastolic < target.diastolic;
+}
+
+// How many readings (with both numbers) were on target
+function targetStats(readings, target) {
+    const withBoth = readings.filter((r) => r.systolic !== null && r.diastolic !== null);
+    const on = withBoth.filter((r) => isOnTarget(r, target)).length;
+    return { count: withBoth.length, onTarget: on, percent: withBoth.length ? Math.round(100 * on / withBoth.length) : null };
+}
+
 // ---------- Readings ----------
 function cleanNumber(v) {
     return Number.isInteger(v) ? v : null;
@@ -203,14 +240,16 @@ function cleanValues(r, which) {
 // Save one or more readings. Readings saved together share a batch id. When a
 // typed note held several readings, note_shared marks that the note covers all of
 // them, so the CSV export can leave it out (it only repeats their numbers).
+// extra.session links readings taken a minute apart (see sessionAverages()).
 function addReadings(profileId, readings, extra) {
     const batch = newId();
     const { position, tags } = cleanDetails(extra);
     const note = cleanNote(extra.note);
+    const session = typeof extra.session === "string" && extra.session ? { session: extra.session } : {};
     const cleaned = readings.map((r, i) => ({
         id: newId(), profile_id: profileId, batch,
         ...cleanValues(r, readings.length === 1 ? "The reading" : "Reading " + (i + 1)),
-        position, tags, note, note_shared: readings.length > 1,
+        position, tags, note, note_shared: readings.length > 1, ...session,
     }));
     commit((d) => d.readings.push(...cleaned));
     return {
@@ -258,6 +297,22 @@ function readingsFor(profileId) {
         .map((r) => ({ ...r, category: categorize(r.systolic, r.diastolic) }));
 }
 
+// The choices for filtering the history: everything, a tag, a position, or notes
+function historyFilters() {
+    return [["all", "All readings"]]
+        .concat(Object.entries(TAGS).map(([k, label]) => ["tag:" + k, label]))
+        .concat(Object.entries(POSITIONS).map(([k, label]) => ["position:" + k, label]))
+        .concat([["note", "With a note"]]);
+}
+
+function filterReadings(readings, filter) {
+    const [kind, key] = (filter || "all").split(":");
+    if (kind === "tag") return readings.filter((r) => r.tags.includes(key));
+    if (kind === "position") return readings.filter((r) => r.position === key);
+    if (kind === "note") return readings.filter((r) => r.note);
+    return readings;
+}
+
 // ---------- Averages ----------
 function average(values) {
     const known = values.filter((v) => v !== null);
@@ -285,6 +340,24 @@ function statsFor(profileId) {
     ];
 }
 
+// ---------- Measurement sessions ----------
+// Home blood pressure guidance is to take 2 or 3 readings a minute apart and use
+// their average. Readings taken that way share a session id. Given readings newest
+// first (as from readingsFor), returns each session with 2 or more readings:
+// its averages, and its reading ids in the order they were taken.
+function sessionAverages(readings) {
+    const groups = {};
+    readings.forEach((r) => {
+        if (r.session) (groups[r.session] = groups[r.session] || []).push(r);
+    });
+    const sessions = {};
+    Object.entries(groups).forEach(([id, members]) => {
+        if (members.length < 2) return;
+        sessions[id] = { ...averagesFor(members, null), ids: members.map((r) => r.id).reverse() };
+    });
+    return sessions;
+}
+
 // ---------- Doctor report ----------
 // Everything the printed report shows, for the last `days` days (all readings when null)
 function reportFor(profileId, days) {
@@ -310,6 +383,8 @@ function reportFor(profileId, days) {
         counts,
         lowest: bySystolic[0] || null,
         highest: bySystolic[bySystolic.length - 1] || null,
+        target: targetFor(profileId),
+        targetStats: targetFor(profileId) ? targetStats(readings, targetFor(profileId)) : null,
     };
 }
 

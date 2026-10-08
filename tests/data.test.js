@@ -19,6 +19,8 @@ const NAMES = [
     "addReadings", "updateReading", "deleteReading", "undoDelete", "readingsFor",
     "averagesFor", "statsFor", "exportCsv", "exportFileName", "csvSafe",
     "parseCsv", "parseDate", "parseTime", "importCsv", "reportFor",
+    "cleanTarget", "setTarget", "targetFor", "isOnTarget", "targetStats", "sessionAverages",
+    "historyFilters", "filterReadings",
 ];
 
 // const/let aren't properties of the context, so collect them at the end of the script
@@ -416,6 +418,93 @@ describe("averages", () => {
         assert.deepEqual(stats.map((s) => s.label), ["Last 7 days", "Last 30 days", "All time"]);
         assert.deepEqual(stats.map((s) => s.count), [2, 3, 4]);
         assert.deepEqual(stats.map((s) => s.systolic), [125, 130, 135]);
+    });
+});
+
+describe("targets", () => {
+    test("cleanTarget accepts a sensible goal or none", () => {
+        const api = load();
+        assert.deepEqual(plain(api.cleanTarget(130, 80)), { systolic: 130, diastolic: 80 });
+        assert.equal(api.cleanTarget(null, null), null);
+        assert.throws(() => api.cleanTarget(130, null), /both target numbers/);
+        assert.throws(() => api.cleanTarget(80, 130), /doesn't look right/);
+        assert.throws(() => api.cleanTarget(300, 80), /doesn't look right/);
+        assert.throws(() => api.cleanTarget(130, 20), /doesn't look right/);
+    });
+
+    test("a target is saved per person and can be cleared", () => {
+        const api = load();
+        const ann = api.addProfile("Ann");
+        const bob = api.addProfile("Bob");
+        api.setTarget(ann.id, { systolic: 125, diastolic: 75 });
+        assert.deepEqual(plain(api.targetFor(ann.id)), { systolic: 125, diastolic: 75 });
+        assert.equal(api.targetFor(bob.id), null);
+        assert.deepEqual(api.saved().profiles.find((p) => p.id === ann.id).target, { systolic: 125, diastolic: 75 });
+        api.setTarget(ann.id, null);
+        assert.equal(api.targetFor(ann.id), null);
+        assert.ok(!("target" in api.saved().profiles.find((p) => p.id === ann.id)));
+    });
+
+    test("on target means under both numbers; readings missing a number aren't counted", () => {
+        const api = load();
+        const target = { systolic: 130, diastolic: 80 };
+        assert.ok(api.isOnTarget({ systolic: 129, diastolic: 79 }, target));
+        assert.ok(!api.isOnTarget({ systolic: 130, diastolic: 79 }, target));
+        assert.ok(!api.isOnTarget({ systolic: 120, diastolic: 80 }, target));
+        const stats = api.targetStats([
+            { systolic: 120, diastolic: 70 }, { systolic: 135, diastolic: 70 },
+            { systolic: 125, diastolic: 75 }, { systolic: null, diastolic: null, pulse: 70 },
+        ], target);
+        assert.deepEqual(plain(stats), { count: 3, onTarget: 2, percent: 67 });
+        assert.deepEqual(plain(api.targetStats([], target)), { count: 0, onTarget: 0, percent: null });
+    });
+
+    test("the report includes the target and how often it was met", () => {
+        const api = load();
+        const p = api.addProfile("Ann");
+        api.setTarget(p.id, { systolic: 130, diastolic: 80 });
+        api.addReadings(p.id, [{ systolic: 120, diastolic: 75, pulse: null, taken_at: daysAgo(api, 2) }], {});
+        api.addReadings(p.id, [{ systolic: 140, diastolic: 85, pulse: null, taken_at: daysAgo(api, 1) }], {});
+        const rep = api.reportFor(p.id, 30);
+        assert.deepEqual(plain(rep.target), { systolic: 130, diastolic: 80 });
+        assert.equal(rep.targetStats.percent, 50);
+    });
+});
+
+describe("measurement sessions", () => {
+    test("readings sharing a session id are averaged, in the order taken", () => {
+        const api = load();
+        const p = api.addProfile("Ann");
+        const t = daysAgo(api, 1);
+        const first = api.addReadings(p.id, [{ systolic: 130, diastolic: 84, pulse: 70, taken_at: t }], { session: "s1" }).readings[0];
+        const second = api.addReadings(p.id, [{ systolic: 126, diastolic: 80, pulse: 68, taken_at: t }], { session: "s1" }).readings[0];
+        api.addReadings(p.id, [{ systolic: 140, diastolic: 90, pulse: 75, taken_at: t }], { session: "alone" });
+        api.addReadings(p.id, [{ systolic: 118, diastolic: 76, pulse: 64, taken_at: t }], {});
+        const sessions = api.sessionAverages(api.readingsFor(p.id));
+        assert.deepEqual(Object.keys(sessions), ["s1"]);  // a session of one isn't shown
+        assert.deepEqual([sessions.s1.count, sessions.s1.systolic, sessions.s1.diastolic, sessions.s1.pulse], [2, 128, 82, 69]);
+        assert.deepEqual(plain(sessions.s1.ids), [first.id, second.id]);
+        assert.equal(api.saved().readings.find((r) => r.systolic === 118).session, undefined);
+    });
+});
+
+describe("history filters", () => {
+    test("filter by tag, position or having a note", () => {
+        const api = load();
+        const p = api.addProfile("Ann");
+        const add = (n, extra) => api.addReadings(p.id, [{ systolic: 120 + n, diastolic: 80, pulse: null, taken_at: daysAgo(api, n) }], extra);
+        add(1, { tags: ["caffeine"], position: "sitting" });
+        add(2, { tags: ["caffeine", "stressed"], note: "busy day" });
+        add(3, { position: "standing" });
+        const all = api.readingsFor(p.id);
+        const systolic = (f) => plain(api.filterReadings(all, f).map((r) => r.systolic));
+        assert.deepEqual(systolic("all"), [121, 122, 123]);
+        assert.deepEqual(systolic("tag:caffeine"), [121, 122]);
+        assert.deepEqual(systolic("tag:stressed"), [122]);
+        assert.deepEqual(systolic("position:standing"), [123]);
+        assert.deepEqual(systolic("note"), [122]);
+        const values = api.historyFilters().map(([v]) => v);
+        assert.ok(values[0] === "all" && values.includes("tag:medication") && values.includes("position:lying") && values.includes("note"));
     });
 });
 

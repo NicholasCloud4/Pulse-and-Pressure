@@ -5,7 +5,8 @@
 // ---------- Trend chart (plain SVG, no library, works offline) ----------
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-// Where AHA's high range starts (stage 1); drawn as dashed lines for reference
+// Where AHA's high range starts (stage 1). The chart's dashed lines show this,
+// or the person's own target from their doctor when they have one.
 const HIGH_FROM = { systolic: 130, diastolic: 80 };
 
 function svgEl(tag, attrs, parent, text) {
@@ -39,9 +40,11 @@ function renderReadout(i) {
 }
 
 // Draws readings (oldest first) into an <svg>, placed along the bottom by their
-// actual time, so a two-week gap looks like one. Returns what the pointer
-// handlers need: the x position of each reading and the plot's edges.
-function drawChart(svg, data, width) {
+// actual time, so a two-week gap looks like one. reference is the dashed lines'
+// { systolic, diastolic }. Returns what the pointer handlers need: the x
+// position of each reading and the plot's edges.
+function drawChart(svg, data, width, reference) {
+    reference = reference || HIGH_FROM;
     svg.replaceChildren();
     const left = 34, right = 38;  // room for tick labels and end labels
     const plotW = width - left - right;
@@ -58,7 +61,7 @@ function drawChart(svg, data, width) {
 
     // Two panels on separate scales: mmHg and bpm are different units
     const panels = [
-        { top: bpTop, h: bpH, title: "Blood pressure (mmHg)", series: [["systolic", "sys"], ["diastolic", "dia"]], lines: [HIGH_FROM.systolic, HIGH_FROM.diastolic] },
+        { top: bpTop, h: bpH, title: "Blood pressure (mmHg)", series: [["systolic", "sys"], ["diastolic", "dia"]], lines: [reference.systolic, reference.diastolic] },
         { top: pulseTop, h: pulseH, title: "Pulse (bpm)", series: [["pulse", "pulse"]], lines: [] },
     ];
     panels.forEach((p) => {
@@ -123,7 +126,7 @@ function renderChart() {
     if (!enough) { svg.replaceChildren(); return; }
 
     const width = $("chart-wrap").clientWidth || 600;
-    const { xs, height, top, bottom } = drawChart(svg, data, width);
+    const { xs, height, top, bottom } = drawChart(svg, data, width, targetFor(profileId));
 
     // Crosshair: snaps to the reading nearest the pointer
     const cross = svgEl("line", { y1: top, y2: bottom, class: "crosshair", visibility: "hidden" }, svg);

@@ -728,6 +728,107 @@ dialog .remove-area {
     border-top: 1px solid var(--border);
 }
 
+/* "Latest: 128/82 ● Stage 1 high · 2 hours ago" */
+.latest {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 8px;
+    margin: 0 0 12px;
+    padding: 0 4px;
+}
+
+/* Taking 2 or 3 readings a minute apart */
+.session {
+    margin-top: 10px;
+    padding: 12px;
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+}
+
+.session p {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.status .compact {
+    margin-left: auto;
+}
+
+.session-avg {
+    margin-left: 4px;
+}
+
+.session-line {
+    font-size: 0.9rem;
+}
+
+/* Target under the averages */
+.target-line {
+    margin: 10px 0 0;
+    font-size: 0.95rem;
+}
+
+.target-line .link {
+    padding: 0;
+    min-height: 44px;
+}
+
+.target-fields {
+    margin: 14px 0 0;
+    padding: 10px 12px 4px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.target-fields legend {
+    padding: 0 4px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.target-fields p {
+    margin: 0 0 8px;
+}
+
+.grid.two {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+/* History: filter and day headings */
+.filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 8px;
+}
+
+.filter select {
+    flex: 1;
+    min-height: 44px;
+}
+
+.filter-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 6px;
+    margin: 0 0 8px;
+}
+
+li.day-head {
+    display: block;
+    padding: 14px 0 2px;
+    border-top: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--muted);
+}
+
+li.day-head + li {
+    border-top: none;
+}
+
 /* Doctor report card */
 .report-controls {
     display: flex;

@@ -26,6 +26,11 @@ let historyPage = 0;
 let totalReadings = 0;
 const CHART_RANGES = ["7", "30", "90", "all"];
 let chartRange = "30";  // days shown in the trend chart
+let historyFilter = "all";  // see historyFilters() in data.js
+let latestReading = null;
+// Taking 2 or 3 readings a minute apart. Every quick-entry reading gets a session id;
+// "Take another" makes the next reading join it, and their average is shown.
+const session = { id: null, count: 0, joining: false, readyAt: 0, timer: null };
 const quick = { position: null, tags: new Set(), timeTouched: false };
 const noteDetails = { position: null, tags: new Set() };
 const editDetails = { position: null, tags: new Set() };
@@ -200,13 +205,15 @@ function renderProfiles() {
     if (hasPerson) loadAll(true);
 }
 
-function setPersonDialog(title, button, name, message, canRemove) {
+// Adding a person asks only for a name; editing also offers the target and Delete
+function setPersonDialog(title, button, name, message, editing) {
     $("person-title").textContent = title;
     $("person-ok").textContent = button;
     $("person-name").value = name || "";
     $("person-message").textContent = message || "";
     $("person-message").hidden = !message;
-    $("person-remove").hidden = !canRemove;
+    $("person-target").hidden = !editing;
+    $("person-remove").hidden = !editing;
     $("person-delete").textContent = "Delete " + name + "…";
 }
 
@@ -221,14 +228,25 @@ async function openPersonDialog(suggestedName, message) {
     return added;
 }
 
-async function editPerson() {
-    setPersonDialog("Edit person", "Save", profileName(profileId), "", true);
+// Rename, set or clear the doctor's target, or delete. focusTarget starts at the target.
+async function editPerson(focusTarget) {
+    const before = profileName(profileId);
+    const target = targetFor(profileId);
+    setPersonDialog("Edit person", "Save", before, "", true);
+    $("target-systolic").value = target ? target.systolic : "";
+    $("target-diastolic").value = target ? target.diastolic : "";
     let remove = false;
     $("person-delete").onclick = () => { remove = true; $("person-dialog").close(); };
-    const renamed = await openDialog("person", () => renameProfile(profileId, $("person-name").value), $("person-name"));
-    if (renamed) {
+    const number = (id) => ($(id).value === "" ? null : parseInt($(id).value, 10));
+    const saved = await openDialog("person", () => {
+        const newTarget = cleanTarget(number("target-systolic"), number("target-diastolic"));  // checked first
+        const name = renameProfile(profileId, $("person-name").value);
+        setTarget(profileId, newTarget);
+        return name;
+    }, focusTarget === true ? $("target-systolic") : $("person-name"));
+    if (saved) {
         renderProfiles();
-        toast("Renamed to " + renamed + ".");
+        toast(saved !== before ? "Renamed to " + saved + "." : "Saved.");
     }
     if (remove) await deletePerson();
 }
@@ -325,6 +343,56 @@ function afterSave(result, position) {
     loadAll(true);  // back to the newest readings
 }
 
+// ---------- Measurement session: 2 or 3 readings a minute apart ----------
+// After a quick-entry save: the average so far, and an offer to take another
+function offerSession(saved) {
+    const box = $("status");
+    const sessions = sessionAverages(readingsFor(profileId));
+    const avg = sessions[session.id];
+    if (avg && avg.systolic !== null && avg.diastolic !== null) {
+        box.append(el("span", "session-avg", "Average of " + avg.count + ": "),
+            el("strong", "", avg.systolic + "/" + avg.diastolic), " ", badge(avg.category));
+    }
+    const hasBoth = saved.systolic !== null && saved.diastolic !== null;
+    if (hasBoth && session.count < 3) {
+        const another = el("button", "compact", session.count === 1 ? "Take another in 1 minute" : "Take a third in 1 minute");
+        another.type = "button";
+        another.onclick = startSessionWait;
+        box.append(another);
+    }
+    clearTimeout(statusTimer);  // keep the offer and average on screen until the next action
+}
+
+function startSessionWait() {
+    session.joining = true;
+    session.readyAt = Date.now() + 60000;
+    showStatus("", false);
+    $("session").hidden = false;
+    sessionTick();
+    clearInterval(session.timer);
+    session.timer = setInterval(sessionTick, 1000);
+}
+
+function sessionTick() {
+    const left = Math.ceil((session.readyAt - Date.now()) / 1000);
+    if (left > 0) {
+        $("session-text").textContent = "Sit still and relax. Reading " + (session.count + 1) + " in 0:"
+            + String(left).padStart(2, "0") + ".";
+        return;
+    }
+    stopSessionWait(false);
+    showStatus("Time for reading " + (session.count + 1) + ". Take it now, then enter the numbers above.", false);
+    $("q-systolic").focus();
+}
+
+// Hides the countdown. end: the next reading starts a new session.
+function stopSessionWait(end) {
+    clearInterval(session.timer);
+    session.timer = null;
+    $("session").hidden = true;
+    if (end) session.joining = false;
+}
+
 // ---------- Quick entry ----------
 function resetQuickTime() {
     quick.timeTouched = false;
@@ -352,15 +420,20 @@ function saveQuick(force) {
         return;
     }
     $("q-check").hidden = true;
-    const result = saveReadings([reading], { note: $("q-note").value, ...detailsOf(quick) },
+    const sessionId = session.joining ? session.id : newId();
+    const result = saveReadings([reading], { note: $("q-note").value, session: sessionId, ...detailsOf(quick) },
         (message) => showStatus(message, true));
     if (!result) return;
+    session.count = session.joining ? session.count + 1 : 1;
+    session.id = sessionId;
+    stopSessionWait(true);
     FIELDS.forEach((key) => { $("q-" + key).value = ""; });
     $("q-note").value = "";
     quick.tags.clear();  // the position is kept for next time; tags are per reading
     renderDetails($("q-details"), quick);
     resetQuickTime();
     afterSave(result, quick.position);
+    offerSession(result.readings[0]);
 }
 
 function setMode(mode) {
@@ -369,6 +442,7 @@ function setMode(mode) {
     $("tab-quick").setAttribute("aria-selected", mode === "quick");
     $("tab-note").setAttribute("aria-selected", mode === "note");
     if (mode === "quick") cancelDraft();
+    stopSessionWait(true);
     showStatus("", false);
     store("mode", mode);
 }
@@ -528,13 +602,72 @@ function loadAll(resetPage) {
     if (resetPage) historyPage = 0;
     const readings = readingsFor(profileId);
     totalReadings = readings.length;
+    latestReading = readings[0] || null;
+    renderLatest();
     renderStats(statsFor(profileId));
+    renderTarget(readings);
     renderTrend(readings);
     $("export").hidden = totalReadings === 0;
     $("report-card").hidden = totalReadings === 0;
     renderBackupNudge();
     renderInstall();
-    loadHistory();
+    loadHistory(readings);
+}
+
+// "Latest: 128/82 · pulse 71 ● Stage 1 high · 2 hours ago" above the form
+function renderLatest() {
+    const box = $("latest");
+    box.hidden = !latestReading;
+    if (!latestReading) return;
+    const r = latestReading;
+    box.replaceChildren(el("span", "", "Latest"), el("strong", "", bpText(r)), badge(r.category),
+        el("span", "muted", agoText(r.taken_at)));
+}
+
+// "just now", "5 minutes ago", "3 hours ago", "yesterday", "4 days ago", then the date
+function agoText(iso) {
+    const minutes = Math.round((Date.now() - new Date(iso)) / 60000);
+    if (minutes < 1) return "just now";
+    const say = new Intl.RelativeTimeFormat([], { numeric: "auto" });
+    if (minutes < 60) return say.format(-minutes, "minute");
+    if (minutes < 12 * 60) return say.format(-Math.round(minutes / 60), "hour");
+    const days = Math.round((startOfDay(new Date()) - startOfDay(new Date(iso))) / DAY);
+    if (days === 0) return say.format(-Math.round(minutes / 60), "hour");
+    return days <= 30 ? say.format(-days, "day") : whenText(iso);
+}
+
+function startOfDay(d) {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+// "Today", "Yesterday" or "Mon, Oct 5" (with the year when it's not this year)
+function dayText(iso) {
+    const d = new Date(iso);
+    const days = Math.round((startOfDay(new Date()) - startOfDay(d)) / DAY);
+    if (days === 0) return "Today";
+    if (days === 1) return "Yesterday";
+    const opts = { weekday: "short", month: "short", day: "numeric" };
+    if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
+    return d.toLocaleDateString([], opts);
+}
+
+// Under the averages: how the last 30 days compare with the doctor's target,
+// or a way to add one
+function renderTarget(readings) {
+    const box = $("target-line");
+    const target = targetFor(profileId);
+    const change = el("button", "link", target ? "Change target" : "Add a target from your doctor");
+    change.type = "button";
+    change.onclick = () => editPerson(true);
+    if (!target) { box.replaceChildren(change); return; }
+
+    const goal = "under " + target.systolic + "/" + target.diastolic;
+    const recent = readings.filter((r) => r.taken_at >= toLocalIso(Date.now() - 30 * DAY));
+    const stats = targetStats(recent, target);
+    box.replaceChildren(stats.count
+        ? el("span", "", "On target (" + goal + "): " + stats.onTarget + " of " + plural(stats.count, "reading")
+            + " in the last 30 days (" + stats.percent + "%). ")
+        : el("span", "", "Target: " + goal + ". No readings in the last 30 days yet. "), change);
 }
 
 // The trend chart for the chosen time range. readings are newest first.
@@ -549,19 +682,40 @@ function renderTrend(readings) {
     empty.textContent = readings.length < 2 ? "Save at least two readings to see a trend."
         : chartData.length === 0 ? "No readings in the last " + days + " days. Choose a longer time above."
             : "Only one reading in the last " + days + " days. Choose a longer time above to see a trend.";
+    const target = targetFor(profileId);
+    $("ref-label").textContent = target ? "Target under " + target.systolic + "/" + target.diastolic : "High from 130/80";
+    $("chart-caption").textContent = "Oldest on the left. "
+        + (target ? "Dashed lines mark the target from the doctor, " + target.systolic + " and " + target.diastolic + ". "
+            : "Dashed lines mark 130 and 80, where the high range starts. ")
+        + "Tap or hover to see a reading.";
     renderChart();
 }
 
-function loadHistory() {
-    const pages = Math.max(1, Math.ceil(totalReadings / PAGE_SIZE));
+// The history list for the chosen filter. readings are newest first.
+function loadHistory(readings) {
+    const all = readings || readingsFor(profileId);
+    const shown = filterReadings(all, historyFilter);
+    const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
     historyPage = Math.min(historyPage, pages - 1);  // e.g. after deleting the last reading on a page
     const first = historyPage * PAGE_SIZE;
-    const readings = readingsFor(profileId).slice(first, first + PAGE_SIZE);
-    renderHistory(readings);
-    $("pager").hidden = totalReadings <= PAGE_SIZE;
-    $("page-info").textContent = (first + 1) + "–" + (first + readings.length) + " of " + totalReadings;
+    const page = shown.slice(first, first + PAGE_SIZE);
+    renderHistory(page, sessionAverages(all));
+    $("filter-wrap").hidden = all.length < 2 && historyFilter === "all";
+    $("recent-empty").textContent = all.length ? "No readings match. Choose another filter above." : "Nothing saved yet.";
+    $("pager").hidden = shown.length <= PAGE_SIZE;
+    $("page-info").textContent = (first + 1) + "–" + (first + page.length) + " of " + shown.length;
     $("newer").disabled = historyPage === 0;
     $("older").disabled = historyPage >= pages - 1;
+
+    // With a filter on, its average, to compare (e.g. readings after caffeine)
+    const summary = $("filter-summary");
+    summary.hidden = historyFilter === "all" || shown.length === 0;
+    if (!summary.hidden) {
+        const avg = averagesFor(shown, null);
+        const value = avg.systolic !== null && avg.diastolic !== null ? avg.systolic + "/" + avg.diastolic : "—";
+        summary.replaceChildren("Average of these " + plural(shown.length, "reading") + ": ",
+            el("strong", "", value + (avg.pulse !== null ? " · pulse " + avg.pulse : "")), " ", badge(avg.category));
+    }
 }
 
 function turnPage(step) {
@@ -592,11 +746,18 @@ function renderStats(periods) {
     });
 }
 
-function renderHistory(readings) {
+// sessions: from sessionAverages(), to show "Reading 2 of 3 · average 126/81"
+function renderHistory(readings, sessions) {
     const ul = $("recent");
     ul.replaceChildren();
     $("recent-empty").hidden = readings.length > 0;
+    let lastDay = null;
     readings.forEach((r) => {
+        const day = dayText(r.taken_at);
+        if (day !== lastDay) {
+            ul.appendChild(el("li", "day-head", day));
+            lastDay = day;
+        }
         const li = document.createElement("li");
         const text = document.createElement("div");
         const line = document.createElement("div");
@@ -606,7 +767,7 @@ function renderHistory(readings) {
         main.textContent = bpText(r);
         line.append(main, badge(r.category));
 
-        const extra = [whenText(r.taken_at)];
+        const extra = [new Date(r.taken_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })];
         if (r.position && options.positions[r.position]) extra.push(options.positions[r.position]);
         const tags = r.tags.filter((t) => options.tags[t]).map((t) => options.tags[t]);
         if (tags.length) extra.push(tags.join(", "));
@@ -614,6 +775,13 @@ function renderHistory(readings) {
         when.className = "muted";
         when.textContent = extra.join(" · ");
         text.append(line, when);
+        const session = r.session && sessions[r.session];
+        if (session) {
+            const avg = session.systolic !== null && session.diastolic !== null
+                ? "average " + session.systolic + "/" + session.diastolic : "";
+            text.appendChild(el("div", "session-line", "Reading " + (session.ids.indexOf(r.id) + 1) + " of "
+                + session.ids.length + (avg ? " · " + avg : "")));
+        }
         if (r.note) text.appendChild(el("div", "note", r.note));
 
         const edit = el("button", "link", "Edit");
@@ -754,6 +922,10 @@ function buildReport(days) {
     if (rep.lowest) notes.push("Lowest: " + bp(rep.lowest) + " on " + whenText(rep.lowest.taken_at));
     notes.push(Object.keys(CATEGORIES).filter((c) => rep.counts[c])
         .map((c) => CATEGORIES[c] + ": " + rep.counts[c]).join(" · "));
+    if (rep.target && rep.targetStats.count) {
+        notes.push("Target from the doctor: under " + rep.target.systolic + "/" + rep.target.diastolic + ". On target: "
+            + rep.targetStats.onTarget + " of " + plural(rep.targetStats.count, "reading") + " (" + rep.targetStats.percent + "%)");
+    }
     notes.forEach((n) => box.appendChild(el("p", "report-line", n)));
 
     if (rep.readings.length >= 2) {
@@ -761,9 +933,10 @@ function buildReport(days) {
         const svg = document.createElementNS(SVG_NS, "svg");
         svg.setAttribute("class", "chart report-chart");
         box.appendChild(svg);
-        drawChart(svg, rep.readings, 680);
-        box.appendChild(el("p", "report-line", "Blue: systolic · Orange: diastolic · Green: pulse · "
-            + "Dashed lines: 130 and 80, where the high range starts"));
+        drawChart(svg, rep.readings, 680, rep.target);
+        box.appendChild(el("p", "report-line", "Blue: systolic · Orange: diastolic · Green: pulse · Dashed lines: "
+            + (rep.target ? "the target, " + rep.target.systolic + " and " + rep.target.diastolic
+                : "130 and 80, where the high range starts")));
     }
 
     box.append(
@@ -885,8 +1058,24 @@ async function restoreFile(file) {
 $("tab-quick").onclick = () => setMode("quick");
 $("tab-note").onclick = () => setMode("note");
 $("q-save").onclick = () => saveQuick();
+// Enter moves top → bottom → pulse, then saves (from the pulse or the note)
+const NEXT_FIELD = { systolic: "diastolic", diastolic: "pulse" };
 FIELDS.concat("note").forEach((key) => {
-    $("q-" + key).onkeydown = (e) => { if (e.key === "Enter") saveQuick(); };
+    $("q-" + key).onkeydown = (e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        if (NEXT_FIELD[key]) $("q-" + NEXT_FIELD[key]).focus(); else saveQuick();
+    };
+});
+// Jump to the next box as soon as a number is clearly complete: "128" or "95" for the
+// top, "82" for the bottom. Two digits that could still grow ("12" toward 128) wait.
+const COMPLETE_AT = { systolic: 30, diastolic: 16 };
+Object.entries(COMPLETE_AT).forEach(([key, twoDigitMin]) => {
+    $("q-" + key).addEventListener("input", (e) => {
+        if (e.inputType && !e.inputType.startsWith("insert")) return;  // not while deleting
+        const v = $("q-" + key).value;
+        if (v.length >= 3 || (v.length === 2 && Number(v) >= twoDigitMin)) $("q-" + NEXT_FIELD[key]).focus();
+    });
 });
 $("q-when").oninput = () => { quick.timeTouched = true; };
 $("quick-mode").addEventListener("input", () => { $("q-check").hidden = true; });  // numbers changed: check again on save
@@ -901,7 +1090,7 @@ $("add-row").onclick = () => {
 };
 $("crisis-close").onclick = () => { $("crisis").hidden = true; };
 $("add-profile").onclick = () => openPersonDialog();
-$("edit-profile").onclick = editPerson;
+$("edit-profile").onclick = () => editPerson();
 $("welcome-form").onsubmit = (e) => {
     e.preventDefault();
     try {
@@ -919,10 +1108,23 @@ $("profile").onchange = () => {
     profileId = $("profile").value;
     store("profileId", profileId);
     cancelDraft();
+    stopSessionWait(true);
     showStatus("", false);
     $("q-check").hidden = true;
     $("crisis").hidden = true;
+    historyFilter = "all";
+    $("history-filter").value = "all";
     loadAll(true);
+};
+$("session-skip").onclick = () => {
+    session.readyAt = Date.now();
+    sessionTick();
+};
+$("session-stop").onclick = () => stopSessionWait(true);
+$("history-filter").onchange = () => {
+    historyFilter = $("history-filter").value;
+    historyPage = 0;
+    loadHistory();
 };
 $("range").onclick = (e) => {
     const button = e.target.closest("button");
@@ -962,6 +1164,7 @@ window.addEventListener("resize", renderChart);
 setInterval(() => {
     $("q-when").max = nowLocal();
     if (!quick.timeTouched) $("q-when").value = nowLocal();
+    renderLatest();  // "5 minutes ago" keeps counting
 }, 30000);
 
 function start() {
@@ -978,6 +1181,11 @@ function start() {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => { });
     quick.position = savedPosition();
     if (CHART_RANGES.includes(recall("chartRange"))) chartRange = recall("chartRange");
+    historyFilters().forEach(([value, label]) => {
+        const o = el("option", "", label);
+        o.value = value;
+        $("history-filter").appendChild(o);
+    });
     renderDetails($("q-details"), quick);
     resetQuickTime();
     setMode("quick");

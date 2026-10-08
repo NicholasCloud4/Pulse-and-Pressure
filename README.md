@@ -17,6 +17,15 @@ anywhere.
 - **Position, tags and notes:** sitting / standing / lying down; medication
   taken, stressed, after exercise, caffeine; and an optional short note ("left
   arm", "felt dizzy"). The app remembers your usual position.
+- **Quick to type:** the cursor jumps to the next box once a number is
+  complete (128, then 82, then the pulse), and the latest reading is shown at
+  the top
+- **2 or 3 readings a minute apart:** after saving, tap **Take another in 1
+  minute** for a short countdown. The app shows the average of the readings
+  taken together, as home blood pressure guidance recommends
+- **Target from your doctor:** enter a goal like "under 130/80" for each
+  person. The app shows how many readings in the last 30 days were on target,
+  and the chart and report use it
 - **Fix mistakes:** edit any saved reading, and undo a delete for a few seconds
   afterwards. Unusual numbers (like a top number of 300) ask you to check
   before saving, and times in the future aren't accepted.
@@ -30,7 +39,8 @@ anywhere.
   mornings vs afternoons and evenings, highest and lowest, a count per
   category, the chart, and every reading
 - **Averages:** last 7 days, last 30 days and all time, with reading counts
-- **Reading history:** 10 readings per page with Newer / Older buttons
+- **Reading history:** grouped by day, 10 readings per page, with a filter
+  (for example only readings after caffeine) that shows their average
 - **Export CSV** to bring to a doctor's appointment or keep as a backup
 - **Restore** from an exported CSV to bring back missing readings or move them
   to a new device
@@ -201,6 +211,9 @@ the app always shows what it read and asks for confirmation before saving.
   and working offline
 - `tests/data.test.js`: tests for `data.js`. Run `node --test` from this folder
   (Node 18 or newer, nothing to install)
+- `tests/browser/`: tests that use the real page in headless Chrome or Edge.
+  Run `node tests/browser/run.mjs` (Node 22 or newer, with Chrome, Edge or
+  Chromium installed; set `CHROME_PATH` if it isn't found)
 - `app.py`: optional local server that serves the page and reads notes with Ollama
 - `parse_test.py`: sends a note to the local model and returns structured readings
 - `test_set.py`: made-up test notes with the correct answers

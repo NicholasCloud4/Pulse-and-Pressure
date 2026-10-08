@@ -67,6 +67,7 @@
         </section>
 
         <div id="person-view" hidden>
+            <p id="latest" class="latest" hidden></p>
             <section id="entry" class="card">
                 <h2>Log a reading</h2>
                 <div id="tabs" class="tabs" role="tablist" aria-label="How to log" hidden>
@@ -77,14 +78,15 @@
                 <div id="quick-mode" role="tabpanel" aria-labelledby="tab-quick">
                     <div class="grid">
                         <label>Top (systolic)<input id="q-systolic" type="number" inputmode="numeric" min="0"
-                                step="1"></label>
+                                step="1" enterkeyhint="next"></label>
                         <label>Bottom (diastolic)<input id="q-diastolic" type="number" inputmode="numeric" min="0"
-                                step="1"></label>
-                        <label>Pulse<input id="q-pulse" type="number" inputmode="numeric" min="0" step="1"></label>
+                                step="1" enterkeyhint="next"></label>
+                        <label>Pulse<input id="q-pulse" type="number" inputmode="numeric" min="0" step="1"
+                                enterkeyhint="done"></label>
                     </div>
                     <label>When<input id="q-when" type="datetime-local"></label>
                     <label class="spaced">Note (optional)<input id="q-note" type="text" maxlength="200"
-                            autocomplete="off" placeholder="Like: left arm, felt dizzy"></label>
+                            autocomplete="off" enterkeyhint="done" placeholder="Like: left arm, felt dizzy"></label>
                     <div id="q-details" class="details"></div>
                     <div id="q-check" class="check" role="alert" hidden></div>
                     <div class="actions">
@@ -100,6 +102,13 @@
                     </div>
                 </div>
                 <p id="status" class="status" role="status"></p>
+                <div id="session" class="session" hidden>
+                    <p id="session-text"></p>
+                    <div class="actions">
+                        <button id="session-skip" class="compact" type="button">Skip the wait</button>
+                        <button id="session-stop" class="compact" type="button">Stop</button>
+                    </div>
+                </div>
             </section>
 
             <section id="confirm" class="card" hidden>
@@ -133,6 +142,7 @@
             <section class="card">
                 <h2>Averages</h2>
                 <div id="stats" class="stats"></div>
+                <p id="target-line" class="target-line"></p>
             </section>
 
             <section class="card">
@@ -151,13 +161,12 @@
                         <span><i class="key sys"></i>Systolic</span>
                         <span><i class="key dia"></i>Diastolic</span>
                         <span><i class="key pulse"></i>Pulse</span>
-                        <span><i class="key ref"></i>High from 130/80</span>
+                        <span><i class="key ref"></i><span id="ref-label">High from 130/80</span></span>
                     </div>
                     <div id="readout" class="readout" aria-live="polite"></div>
                     <svg id="chart" class="chart" tabindex="0" role="img"
                         aria-label="Trend of readings over time. Use the left and right arrow keys to step through them."></svg>
-                    <p class="muted">Oldest on the left. Dashed lines mark 130 and 80, where the high range starts.
-                        Tap or hover to see a reading.</p>
+                    <p id="chart-caption" class="muted"></p>
                 </div>
             </section>
 
@@ -171,6 +180,8 @@
                 </div>
                 <p class="muted">Readings are saved only in this browser, on this device. Export a file now and then
                     as a backup. Restore adds back any readings from a file that are missing here.</p>
+                <label id="filter-wrap" class="filter">Show<select id="history-filter"></select></label>
+                <p id="filter-summary" class="filter-summary" hidden></p>
                 <p id="recent-empty" class="muted">Nothing saved yet.</p>
                 <ul id="recent"></ul>
                 <div id="pager" class="pager" hidden>
@@ -221,6 +232,17 @@
             <p id="person-message" class="muted"></p>
             <label>Name<input id="person-name" type="text" maxlength="40" autocomplete="off"
                     autocapitalize="words" enterkeyhint="done"></label>
+            <fieldset id="person-target" class="target-fields" hidden>
+                <legend>Target from the doctor (optional)</legend>
+                <p class="muted">If the doctor gave a goal like "under 130/80", enter it here. Readings under both
+                    numbers count as on target. Leave both empty for no target.</p>
+                <div class="grid two">
+                    <label>Top under<input id="target-systolic" type="number" inputmode="numeric" min="0" step="1"
+                            placeholder="130"></label>
+                    <label>Bottom under<input id="target-diastolic" type="number" inputmode="numeric" min="0"
+                            step="1" placeholder="80"></label>
+                </div>
+            </fieldset>
             <p id="person-error" class="status error" role="alert"></p>
             <div class="actions">
                 <button id="person-ok" class="primary" type="submit">Add person</button>
