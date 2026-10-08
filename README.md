@@ -26,8 +26,8 @@ anywhere.
 - **Target from your doctor:** enter a goal like "under 130/80" for each
   person. The app shows how many readings in the last 30 days were on target,
   and the chart and report use it
-- **Fix mistakes:** edit any saved reading, and undo a delete for a few seconds
-  afterwards. Unusual numbers (like a top number of 300) ask you to check
+- **Fix mistakes:** edit any saved reading. Deleting one asks you to confirm
+  first, and can still be undone for a few seconds afterwards. Unusual numbers (like a top number of 300) ask you to check
   before saving, and times in the future aren't accepted.
 - **AHA categories:** each reading is labeled using general adult ranges from
   the American Heart Association (see the table below)

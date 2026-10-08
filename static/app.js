@@ -162,7 +162,7 @@ function ask({ title, message, button, danger, typeToConfirm }) {
             throw new Error("Type " + typeToConfirm + " to confirm.");
         }
         return true;
-    }, typeToConfirm ? $("ask-input") : $("ask-ok"));
+    }, typeToConfirm ? $("ask-input") : danger ? $("ask-cancel") : $("ask-ok"));  // Enter never deletes by accident
 }
 
 // "These numbers look unusual" with Fix it / Save anyway, shown above the save button
@@ -800,7 +800,16 @@ function renderHistory(readings, sessions) {
 }
 
 // Deletes straight away, with a few seconds to undo
-function removeReading(r) {
+// Asks first, then deletes, with a few seconds to undo as well
+async function removeReading(r) {
+    const sure = await ask({
+        title: "Delete this reading?",
+        message: bpText(r) + (r.category ? " (" + options.categories[r.category] + ")" : "")
+            + ", " + whenText(r.taken_at) + ". You'll have a few seconds to undo it.",
+        button: "Delete",
+        danger: true,
+    });
+    if (!sure) return;
     let removed;
     try {
         removed = deleteReading(r.id);

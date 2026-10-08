@@ -1,6 +1,6 @@
 // The main flow: welcome card, quick save, unusual numbers, future times, editing,
 // delete with undo, people, restore, the backup reminder, and dark mode.
-export default async function main({ js, check, shot, sleep, send, navigate, reload }) {
+export default async function main({ js, waitFor, check, shot, sleep, send, navigate, reload }) {
     await navigate();
     await js(`localStorage.clear()`);
     await reload();
@@ -73,10 +73,21 @@ export default async function main({ js, check, shot, sleep, send, navigate, rel
     check("edit requires a time", (await js(`return t.text("edit-error")`)).includes("date and time"));
     await js(`t.click("edit-cancel")`);
 
-    // --- Delete with undo ---
+    // --- Delete: confirm first, then undo ---
     const before = await js(`return t.stored().readings.length`);
     await js(`document.querySelector("#recent li .row-actions .danger").click()`);
-    check("delete is immediate with Undo", (await js(`return t.stored().readings.length`)) === before - 1 && await js(`return t.vis("toast") && t.text("toast-action") === "Undo"`));
+    const asked = await js(`return { open: document.getElementById("ask-dialog").open, title: t.text("ask-title"), message: t.text("ask-message"),
+      button: t.text("ask-ok"), red: document.getElementById("ask-ok").classList.contains("destructive"), focus: document.activeElement.id, count: t.stored().readings.length }`);
+    check("Delete asks first and deletes nothing yet", asked.open && asked.title === "Delete this reading?" && asked.button === "Delete" && asked.red && asked.count === before, asked);
+    check("the question names the reading", /^\d+\/\d+/.test(asked.message), asked.message);
+    check("Cancel has the focus, so Enter doesn't delete", asked.focus === "ask-cancel", asked.focus);
+    await shot("05-confirm-delete");
+    await js(`t.click("ask-cancel")`);
+    await waitFor(`return !document.getElementById("ask-dialog").open`);
+    check("Cancel keeps the reading", (await js(`return t.stored().readings.length`)) === before);
+    await js(`document.querySelector("#recent li .row-actions .danger").click(); document.getElementById("ask-form").requestSubmit()`);
+    await waitFor(`return t.stored().readings.length === ${before - 1}`);
+    check("confirming deletes it, with Undo", (await js(`return t.stored().readings.length`)) === before - 1 && await js(`return t.vis("toast") && t.text("toast-action") === "Undo"`));
     await shot("05-undo");
     await js(`t.click("toast-action")`);
     check("Undo puts it back", (await js(`return t.stored().readings.length`)) === before);
@@ -142,7 +153,8 @@ export default async function main({ js, check, shot, sleep, send, navigate, rel
       loadAll(true);`);
     await shot("09-light-full");
     await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "dark" }] });
-    await js(`document.querySelector("#recent li .row-actions .danger").click()`);
+    await js(`document.querySelector("#recent li .row-actions .danger").click(); document.getElementById("ask-form").requestSubmit()`);
+    await waitFor(`return !document.getElementById("ask-dialog").open`);
     await shot("10-dark-full");
     await js(`t.quick("300", "82", "71")`);
     await js(`document.getElementById("q-check").scrollIntoView()`);
