@@ -23,7 +23,12 @@ anywhere.
 - **AHA categories:** each reading is labeled using general adult ranges from
   the American Heart Association (see the table below)
 - **Crisis alert:** a reading above 180/120 shows a clear warning with what to do
-- **Trend chart:** systolic, diastolic and pulse over the last 20 readings
+- **Trend chart:** systolic, diastolic and pulse over the last 7, 30 or 90 days
+  or all time, spaced by date, with dashed lines at 130 and 80 where the high
+  range starts
+- **Report for your doctor:** a printable summary (or PDF) with averages,
+  mornings vs afternoons and evenings, highest and lowest, a count per
+  category, the chart, and every reading
 - **Averages:** last 7 days, last 30 days and all time, with reading counts
 - **Reading history:** 10 readings per page with Newer / Older buttons
 - **Export CSV** to bring to a doctor's appointment or keep as a backup

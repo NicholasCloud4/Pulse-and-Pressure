@@ -20,8 +20,9 @@
     /* chart series */
     --series-sys: #2a78d6;
     --series-dia: #eb6834;
-    --series-pulse: #1baf7a;
+    --series-pulse: #159a6b;
     --gridline: #e1e0d9;
+    --refline: #8a939c;
 
     /* category status (always paired with a text label) */
     --good: #0ca30c;
@@ -53,6 +54,7 @@
         --series-dia: #d95926;
         --series-pulse: #199e70;
         --gridline: #2c2f33;
+        --refline: #6f7882;
     }
 }
 
@@ -496,6 +498,39 @@ button.primary.destructive {
     stroke: var(--series-pulse);
 }
 
+.key.ref {
+    height: 0;
+    border-top: 2px dashed var(--refline);
+}
+
+/* 7d / 30d / 90d / All */
+.segmented {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+
+.segmented button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 8px;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.segmented button[aria-pressed="true"] {
+    background: var(--card);
+    color: var(--text);
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
 .readout {
     min-height: 2.6em;
     margin-bottom: 4px;
@@ -511,7 +546,7 @@ button.primary.destructive {
     outline-offset: 4px;
 }
 
-#chart .line {
+.chart .line {
     fill: none;
     stroke-width: 2;
     stroke-linejoin: round;
@@ -519,46 +554,52 @@ button.primary.destructive {
     background: none;
 }
 
-#chart .mark {
+.chart .mark {
     stroke: var(--card);
     stroke-width: 2;
 }
 
-#chart .mark.sys {
+.chart .mark.sys {
     fill: var(--series-sys);
 }
 
-#chart .mark.dia {
+.chart .mark.dia {
     fill: var(--series-dia);
 }
 
-#chart .mark.pulse {
+.chart .mark.pulse {
     fill: var(--series-pulse);
 }
 
-#chart .gridline {
+.chart .gridline {
     stroke: var(--gridline);
     stroke-width: 1;
 }
 
-#chart .axis-text {
+.chart .axis-text {
     fill: var(--muted);
     font-size: 12px;
     font-variant-numeric: tabular-nums;
 }
 
-#chart .panel-title {
+.chart .panel-title {
     fill: var(--muted);
     font-size: 13px;
 }
 
-#chart .end-label {
+.chart .end-label {
     fill: var(--text);
     font-size: 12px;
     font-weight: 600;
 }
 
-#chart .crosshair {
+.chart .refline {
+    stroke: var(--refline);
+    stroke-width: 1.5;
+    stroke-dasharray: 5 4;
+}
+
+.chart .crosshair {
     stroke: var(--muted);
     stroke-width: 1;
 }
@@ -685,6 +726,128 @@ dialog .remove-area {
     margin-top: 16px;
     padding-top: 8px;
     border-top: 1px solid var(--border);
+}
+
+/* Doctor report card */
+.report-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.report-controls label {
+    flex: 1 1 160px;
+}
+
+.report-controls select {
+    width: 100%;
+    margin-top: 4px;
+}
+
+.report-controls button {
+    flex: 1 1 200px;
+}
+
+/* The report itself only appears on paper */
+.report {
+    display: none;
+}
+
+@media print {
+
+    /* Always print in light colors, even when the phone is in dark mode */
+    :root {
+        --bg: #ffffff;
+        --card: #ffffff;
+        --text: #000000;
+        --muted: #444b52;
+        --border: #c9ced4;
+        --series-sys: #2a78d6;
+        --series-dia: #eb6834;
+        --series-pulse: #159a6b;
+        --gridline: #e1e0d9;
+        --refline: #8a939c;
+        --danger: #b42318;
+    }
+
+    @page {
+        margin: 14mm;
+    }
+
+    body {
+        background: #ffffff;
+        font-size: 10.5pt;
+    }
+
+    body> :not(#report) {
+        display: none !important;
+    }
+
+    .report {
+        display: block;
+    }
+
+    .report h1 {
+        font-size: 16pt;
+        margin: 0 0 2pt;
+    }
+
+    .report h2 {
+        font-size: 12pt;
+        margin: 14pt 0 6pt;
+        break-after: avoid;
+    }
+
+    .report-meta {
+        margin: 0 0 6pt;
+        color: var(--muted);
+    }
+
+    .report-line {
+        margin: 4pt 0 0;
+    }
+
+    .report table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .report th,
+    .report td {
+        text-align: left;
+        vertical-align: top;
+        padding: 3pt 6pt 3pt 0;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .report th {
+        font-size: 9pt;
+        color: var(--muted);
+        font-weight: 600;
+    }
+
+    .report tr {
+        break-inside: avoid;
+    }
+
+    .report td .badge {
+        font-size: inherit;
+    }
+
+    .report-chart {
+        display: block;
+        width: 100%;
+        height: auto;
+        break-inside: avoid;
+    }
+
+    .report-foot {
+        margin-top: 12pt;
+        font-size: 9pt;
+        color: var(--muted);
+    }
 }
 
 /* Three number boxes get tight on small phones */

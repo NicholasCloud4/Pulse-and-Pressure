@@ -285,6 +285,34 @@ function statsFor(profileId) {
     ];
 }
 
+// ---------- Doctor report ----------
+// Everything the printed report shows, for the last `days` days (all readings when null)
+function reportFor(profileId, days) {
+    const since = days ? toLocalIso(Date.now() - days * 86400000) : "";
+    const readings = readingsFor(profileId).filter((r) => r.taken_at >= since).reverse();  // oldest first
+    const hour = (r) => Number(r.taken_at.slice(11, 13));
+    const counts = {};
+    Object.keys(CATEGORIES).forEach((c) => { counts[c] = 0; });
+    readings.forEach((r) => { if (r.category) counts[r.category]++; });
+    // Highest and lowest by the top number, then the bottom number
+    const bySystolic = readings
+        .filter((r) => r.systolic !== null && r.diastolic !== null)
+        .sort((a, b) => a.systolic - b.systolic || a.diastolic - b.diastolic);
+    return {
+        readings,
+        from: readings.length ? readings[0].taken_at : null,
+        to: readings.length ? readings[readings.length - 1].taken_at : null,
+        periods: [
+            { label: "All readings", ...averagesFor(readings, null) },
+            { label: "Mornings (before noon)", ...averagesFor(readings.filter((r) => hour(r) < 12), null) },
+            { label: "Afternoons and evenings", ...averagesFor(readings.filter((r) => hour(r) >= 12), null) },
+        ],
+        counts,
+        lowest: bySystolic[0] || null,
+        highest: bySystolic[bySystolic.length - 1] || null,
+    };
+}
+
 // ---------- CSV export ----------
 const CSV_HEADER = ["Date", "Time", "Systolic", "Diastolic", "Pulse", "Category", "Position", "Tags", "Note"];
 

@@ -24,6 +24,8 @@ let chartData = [];
 const PAGE_SIZE = 10;  // readings per page in "Recent readings"
 let historyPage = 0;
 let totalReadings = 0;
+const CHART_RANGES = ["7", "30", "90", "all"];
+let chartRange = "30";  // days shown in the trend chart
 const quick = { position: null, tags: new Set(), timeTouched: false };
 const noteDetails = { position: null, tags: new Set() };
 const editDetails = { position: null, tags: new Set() };
@@ -527,12 +529,27 @@ function loadAll(resetPage) {
     const readings = readingsFor(profileId);
     totalReadings = readings.length;
     renderStats(statsFor(profileId));
-    chartData = readings.slice(0, 20).reverse();
-    renderChart();
+    renderTrend(readings);
     $("export").hidden = totalReadings === 0;
+    $("report-card").hidden = totalReadings === 0;
     renderBackupNudge();
     renderInstall();
     loadHistory();
+}
+
+// The trend chart for the chosen time range. readings are newest first.
+function renderTrend(readings) {
+    const days = chartRange === "all" ? null : Number(chartRange);
+    const since = days ? toLocalIso(Date.now() - days * DAY) : "";
+    chartData = readings.filter((r) => r.taken_at >= since).reverse();  // oldest first
+    $("range").hidden = readings.length < 2;
+    $("range").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.days === chartRange));
+    const empty = $("chart-empty");
+    empty.hidden = chartData.length >= 2;
+    empty.textContent = readings.length < 2 ? "Save at least two readings to see a trend."
+        : chartData.length === 0 ? "No readings in the last " + days + " days. Choose a longer time above."
+            : "Only one reading in the last " + days + " days. Choose a longer time above to see a trend.";
+    renderChart();
 }
 
 function loadHistory() {
@@ -688,6 +705,94 @@ function snoozeBackup() {
     $("backup-nudge").hidden = true;
 }
 
+// ---------- Doctor report (printed, or saved as PDF from the print window) ----------
+function dateText(iso) {
+    return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+}
+
+function tableEl(headers, rows) {
+    const table = el("table");
+    const head = el("tr");
+    headers.forEach((h) => head.appendChild(el("th", "", h)));
+    const thead = el("thead");
+    thead.appendChild(head);
+    const tbody = el("tbody");
+    rows.forEach((cells) => {
+        const tr = el("tr");
+        cells.forEach((c) => {
+            const td = el("td");
+            td.append(c === null || c === undefined ? "" : c);
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+    table.append(thead, tbody);
+    return table;
+}
+
+function buildReport(days) {
+    const rep = reportFor(profileId, days);
+    const box = $("report");
+    box.replaceChildren();
+    if (!rep.readings.length) return false;
+
+    const bp = (r) => (r.systolic !== null || r.diastolic !== null ? (r.systolic ?? "?") + "/" + (r.diastolic ?? "?") : "");
+    box.append(
+        el("h1", "", "Blood pressure and pulse log"),
+        el("p", "report-meta", profileName(profileId) + " · " + dateText(rep.from) + " to " + dateText(rep.to)
+            + " · " + plural(rep.readings.length, "reading") + " · Printed " + dateText(nowLocal())),
+        el("h2", "", "Averages"),
+        tableEl(["", "Readings", "Average", "Pulse", "Category"], rep.periods.map((p) => [
+            p.label, p.count,
+            p.systolic !== null && p.diastolic !== null ? p.systolic + "/" + p.diastolic : "—",
+            p.pulse ?? "—",
+            p.category ? badge(p.category) : "",
+        ])),
+    );
+    const notes = [];
+    if (rep.highest) notes.push("Highest: " + bp(rep.highest) + " on " + whenText(rep.highest.taken_at));
+    if (rep.lowest) notes.push("Lowest: " + bp(rep.lowest) + " on " + whenText(rep.lowest.taken_at));
+    notes.push(Object.keys(CATEGORIES).filter((c) => rep.counts[c])
+        .map((c) => CATEGORIES[c] + ": " + rep.counts[c]).join(" · "));
+    notes.forEach((n) => box.appendChild(el("p", "report-line", n)));
+
+    if (rep.readings.length >= 2) {
+        box.appendChild(el("h2", "", "Trend"));
+        const svg = document.createElementNS(SVG_NS, "svg");
+        svg.setAttribute("class", "chart report-chart");
+        box.appendChild(svg);
+        drawChart(svg, rep.readings, 680);
+        box.appendChild(el("p", "report-line", "Blue: systolic · Orange: diastolic · Green: pulse · "
+            + "Dashed lines: 130 and 80, where the high range starts"));
+    }
+
+    box.append(
+        el("h2", "", "All readings"),
+        tableEl(["Date", "Time", "Blood pressure", "Pulse", "Category", "Position", "Tags", "Note"],
+            rep.readings.map((r) => [
+                dateText(r.taken_at),
+                new Date(r.taken_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+                bp(r), r.pulse,
+                r.category ? CATEGORIES[r.category] : "",
+                POSITIONS[r.position] || "",
+                r.tags.map((t) => TAGS[t]).filter(Boolean).join(", "),
+                r.note_shared ? "" : r.note,  // a note typed with several readings only repeats their numbers
+            ])),
+        el("p", "report-foot", "Categories use general American Heart Association ranges for adults; the "
+            + "doctor may set different targets. Logged at home with Pulse & Pressure. This is a log, not a diagnosis."),
+    );
+    return true;
+}
+
+function printReport() {
+    const choice = $("report-days").value;
+    if (!buildReport(choice === "all" ? null : Number(choice))) {
+        toast("There are no readings in that period. Choose a longer one.");
+        return;
+    }
+    window.print();
+}
+
 // ---------- Installing to the home screen ----------
 // Android (Chrome, Edge, Samsung Internet) offers an install prompt we can trigger;
 // iPhone and iPad only install from the Share menu, so they get instructions instead.
@@ -819,6 +924,13 @@ $("profile").onchange = () => {
     $("crisis").hidden = true;
     loadAll(true);
 };
+$("range").onclick = (e) => {
+    const button = e.target.closest("button");
+    if (!button) return;
+    chartRange = button.dataset.days;
+    store("chartRange", chartRange);
+    renderTrend(readingsFor(profileId));
+};
 $("newer").onclick = () => turnPage(-1);
 $("older").onclick = () => turnPage(1);
 $("export").onclick = downloadCsv;
@@ -830,6 +942,7 @@ $("restore-file").onchange = async () => {
     $("restore-file").value = "";  // so picking the same file again still works
     if (file) await restoreFile(file);
 };
+$("report-go").onclick = printReport;
 $("install-go").onclick = install;
 $("install-later").onclick = () => {
     store("installSnooze", toLocalIso(Date.now() + 30 * DAY));
@@ -864,6 +977,7 @@ function start() {
     // https or localhost, so it's skipped on a home-network address like 192.168.x.x.
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => { });
     quick.position = savedPosition();
+    if (CHART_RANGES.includes(recall("chartRange"))) chartRange = recall("chartRange");
     renderDetails($("q-details"), quick);
     resetQuickTime();
     setMode("quick");

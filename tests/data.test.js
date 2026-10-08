@@ -18,7 +18,7 @@ const NAMES = [
     "listProfiles", "checkName", "addProfile", "renameProfile", "deleteProfile", "profileName",
     "addReadings", "updateReading", "deleteReading", "undoDelete", "readingsFor",
     "averagesFor", "statsFor", "exportCsv", "exportFileName", "csvSafe",
-    "parseCsv", "parseDate", "parseTime", "importCsv",
+    "parseCsv", "parseDate", "parseTime", "importCsv", "reportFor",
 ];
 
 // const/let aren't properties of the context, so collect them at the end of the script
@@ -416,6 +416,61 @@ describe("averages", () => {
         assert.deepEqual(stats.map((s) => s.label), ["Last 7 days", "Last 30 days", "All time"]);
         assert.deepEqual(stats.map((s) => s.count), [2, 3, 4]);
         assert.deepEqual(stats.map((s) => s.systolic), [125, 130, 135]);
+    });
+});
+
+describe("reportFor", () => {
+    // Readings at a set hour, n days ago
+    const at = (api, n, time) => daysAgo(api, n).slice(0, 10) + "T" + time;
+
+    function setUp() {
+        const api = load();
+        const p = api.addProfile("Ann");
+        const save = (n, time, systolic, diastolic, pulse) =>
+            api.addReadings(p.id, [{ taken_at: at(api, n, time), systolic, diastolic, pulse }], {});
+        save(100, "08:00", 150, 95, 80);   // outside 90 days
+        save(20, "07:30", 120, 80, 60);    // morning, stage 1
+        save(10, "08:15", 130, 84, 70);    // morning, stage 1
+        save(5, "19:00", 140, 90, 76);     // evening, stage 2
+        save(2, "21:45", 118, 76, null);   // evening, normal
+        save(1, "12:00", null, null, 72);  // noon counts as afternoon; pulse only
+        return { api, p };
+    }
+
+    test("limits to the period and lists readings oldest first", () => {
+        const { api, p } = setUp();
+        const rep = api.reportFor(p.id, 90);
+        assert.equal(rep.readings.length, 5);
+        assert.deepEqual(plain(rep.readings.map((r) => r.systolic)), [120, 130, 140, 118, null]);
+        assert.equal(rep.from, at(api, 20, "07:30"));
+        assert.equal(rep.to, at(api, 1, "12:00"));
+        assert.equal(api.reportFor(p.id, null).readings.length, 6);
+    });
+
+    test("averages all readings, mornings and the rest of the day", () => {
+        const { api, p } = setUp();
+        const [all, mornings, later] = api.reportFor(p.id, 90).periods;
+        assert.deepEqual([all.count, all.systolic, all.diastolic, all.pulse], [5, 127, 83, 70]);
+        assert.deepEqual([mornings.count, mornings.systolic, mornings.diastolic, mornings.pulse, mornings.category],
+            [2, 125, 82, 65, "stage1"]);
+        assert.deepEqual([later.count, later.systolic, later.diastolic, later.pulse], [3, 129, 83, 74]);
+    });
+
+    test("counts categories and finds the highest and lowest", () => {
+        const { api, p } = setUp();
+        const rep = api.reportFor(p.id, 90);
+        assert.deepEqual(plain(rep.counts), { normal: 1, elevated: 0, stage1: 2, stage2: 1, crisis: 0 });
+        assert.equal(rep.highest.systolic, 140);
+        assert.equal(rep.lowest.systolic, 118);
+    });
+
+    test("an empty period has no readings and no highest or lowest", () => {
+        const { api } = setUp();
+        const bob = api.addProfile("Bob");
+        const empty = api.reportFor(bob.id, 30);
+        assert.equal(empty.readings.length, 0);
+        assert.equal(empty.from, null);
+        assert.equal(empty.highest, null);
     });
 });
 
