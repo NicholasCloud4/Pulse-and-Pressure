@@ -19,6 +19,16 @@ export default async function layout({ js, waitFor, check, shot, send, navigate,
         .map((e) => ({ e, r: e.getBoundingClientRect() }))
         .filter(({ e, r }) => r.height < 44 || (e.tagName === "BUTTON" && r.width < 44))
         .map(({ e, r }) => (e.id || e.textContent.trim().slice(0, 20)) + " " + Math.round(r.width) + "x" + Math.round(r.height));
+      // WCAG contrast between two computed "rgb(...)" colors
+      window.contrast = (a, b) => {
+        const lum = (c) => { const [r, g, bl] = c.match(/[\\d.]+/g).slice(0, 3).map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+          return 0.2126 * r + 0.7152 * g + 0.0722 * bl; };
+        const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+        return (x + 0.05) / (y + 0.05);
+      };
+      // The number boxes' outline against the card and against their own fill
+      window.fieldContrast = () => { const s = getComputedStyle($$("q-systolic")), card = getComputedStyle($$("entry")).backgroundColor;
+        return Math.min(contrast(s.borderTopColor, card), contrast(s.borderTopColor, s.backgroundColor)); };
       $$("welcome-name").value = "Sam"; $$("welcome-form").requestSubmit();
       // 45 days of made-up readings, morning and evening, some taken as 2-reading sessions
       let seed = 7;
@@ -69,6 +79,11 @@ export default async function layout({ js, waitFor, check, shot, send, navigate,
     const people = await js(`return [$$("edit-profile").textContent.trim(), $$("add-profile").textContent.trim()]`);
     check("the person buttons say what they do", people.every((t) => /[a-z]{3}/i.test(t)), people);
     check("no sideways scrolling at 360px", await js(`return document.documentElement.scrollWidth <= innerWidth`));
+    const field = await js(`return fieldContrast()`);
+    check("number boxes have a visible outline (3:1)", field >= 3, field);
+    const chartText = await js(`return Math.min(...[...document.querySelectorAll("#chart text")].map((t) => parseFloat(getComputedStyle(t).fontSize)))`);
+    check("chart text is at least 14px", chartText >= 14, chartText);
+
     // --- P6: a session is one history row, rows open Edit, Delete lives in the edit window ---
     await js(`
       const t = Date.now() - 5 * 60000, s = newId();
@@ -105,6 +120,8 @@ export default async function layout({ js, waitFor, check, shot, send, navigate,
 
     await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "dark" }] });
     await js(`scrollTo(0, 0)`);
+    const darkField = await js(`return fieldContrast()`);
+    check("number boxes have a visible outline in dark mode (3:1)", darkField >= 3, darkField);
     await shot("35-first-screen-dark", false);
     await shot("36-full-dark", true);
 }

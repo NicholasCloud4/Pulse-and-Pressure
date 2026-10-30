@@ -6,6 +6,7 @@
     --accent: #1769aa;
     --on-accent: #ffffff;
     --border: #d8dde3;
+    --field-border: #848d97;  /* 3:1 against card and page, so empty boxes are easy to see */
     --warn: #b45309;
     --danger: #b42318;
     --on-danger: #ffffff;
@@ -40,6 +41,7 @@
         --accent: #6cb6ff;
         --on-accent: #0b1a26;
         --border: #2f363d;
+        --field-border: #6f7882;
         --warn: #f0b25c;
         --danger: #ff8a80;
         --on-danger: #2a0d0a;
@@ -71,6 +73,7 @@ body {
     background: var(--bg);
     color: var(--text);
     font: 18px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-variant-numeric: tabular-nums;  /* readings stacked in a list line up */
 }
 
 main {
@@ -136,7 +139,7 @@ select {
     font: inherit;
     color: var(--text);
     background: var(--bg);
-    border: 1px solid var(--border);
+    border: 1px solid var(--field-border);
     border-radius: 10px;
     padding: 12px;
 }
@@ -581,18 +584,17 @@ button.primary.destructive {
 
 .chart .axis-text {
     fill: var(--muted);
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
+    font-size: 14px;
 }
 
 .chart .panel-title {
     fill: var(--muted);
-    font-size: 13px;
+    font-size: 14px;
 }
 
 .chart .end-label {
     fill: var(--text);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
 }
 

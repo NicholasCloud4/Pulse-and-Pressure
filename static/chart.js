@@ -79,7 +79,7 @@ function drawChart(svg, data, width, reference) {
 
         for (let v = lo; v <= hi; v += step) {
             svgEl("line", { x1: left, x2: width - right, y1: y(v), y2: y(v), class: "gridline" }, svg);
-            svgEl("text", { x: left - 6, y: y(v) + 4, "text-anchor": "end", class: "axis-text" }, svg, v);
+            svgEl("text", { x: left - 6, y: y(v) + 5, "text-anchor": "end", class: "axis-text" }, svg, v);
         }
         p.lines.forEach((v) => {
             svgEl("line", { x1: left, x2: width - right, y1: y(v), y2: y(v), class: "refline" }, svg);
@@ -104,7 +104,7 @@ function drawChart(svg, data, width, reference) {
                 svgEl("circle", { cx: xs[i], cy: y(r[key]), r: dense ? 2.5 : 4, class: "mark " + cls }, svg);
                 last = i;
             });
-            svgEl("text", { x: xs[last] + 8, y: y(data[last][key]) + 4, class: "end-label" }, svg, data[last][key]);
+            svgEl("text", { x: xs[last] + 8, y: y(data[last][key]) + 5, class: "end-label" }, svg, data[last][key]);
         });
     });
 
