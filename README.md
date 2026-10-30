@@ -9,27 +9,34 @@ anywhere.
 
 ## Features
 
+- **How you're doing, at the top:** the latest reading, the last 7 days'
+  average and how often readings were on the doctor's target
+- **Quick to type:** three numbers and **Save reading** fit on the first
+  screen of a small phone. The cursor jumps to the next box once a number is
+  complete (128, then 82, then the pulse), and the time is "now" unless you
+  tap **Change**
 - **Position, tags and notes:** sitting / standing / lying down; medication
   taken, stressed, after exercise, caffeine; and an optional short note ("left
-  arm", "felt dizzy"). The app remembers your usual position.
-- **Quick to type:** the cursor jumps to the next box once a number is
-  complete (128, then 82, then the pulse), and the latest reading is shown at
-  the top
+  arm", "felt dizzy"), folded under **Add a note, position or tags**. The app
+  remembers your usual position and names it on that line.
 - **2 or 3 readings a minute apart:** after saving, tap **Take another in 1
   minute** for a short countdown. The app shows the average of the readings
-  taken together, as home blood pressure guidance recommends
+  taken together, as home blood pressure guidance recommends, and the history
+  shows them as one row with their average
 - **Target from your doctor:** enter a goal like "under 130/80" for each
   person. The app shows how many readings in the last 30 days were on target,
   and the chart and report use it
-- **Fix mistakes:** edit any saved reading. Deleting one asks you to confirm
-  first, and can still be undone for a few seconds afterwards. Unusual numbers (like a top number of 300) ask you to check
-  before saving, and times in the future aren't accepted.
+- **Fix mistakes:** tap any saved reading to edit it. **Delete this reading**
+  is at the bottom of that window; it asks you to confirm first, and can still
+  be undone for a few seconds afterwards. Unusual numbers (like a top number of
+  300) ask you to check before saving, and times in the future aren't accepted.
 - **AHA categories:** each reading is labeled using general adult ranges from
   the American Heart Association (see the table below)
 - **Severe reading alert:** a reading above 180/120 shows what to do, following
   the AHA's 2025 guidance: call 911 right away if there are symptoms;
   otherwise wait at least a minute, measure again, and contact the doctor if
-  it's still that high
+  it's still that high. **Start 1-minute timer** counts down to the retake,
+  which isn't averaged with the high reading
 - **Trend chart:** systolic, diastolic and pulse over the last 7, 30 or 90 days
   or all time, spaced by date, with dashed lines at 130 and 80 where the high
   range starts
@@ -37,15 +44,16 @@ anywhere.
   mornings vs afternoons and evenings, highest and lowest, a count per
   category, the chart, and every reading
 - **Averages:** last 7 days, last 30 days and all time, with reading counts
-- **Reading history:** grouped by day, 10 readings per page, with a filter
+- **Reading history:** grouped by day, 10 rows per page, with a filter
   (for example only readings after caffeine) that shows their average
-- **Export CSV** to bring to a doctor's appointment or keep as a backup
-- **Restore** from an exported CSV to bring back missing readings or move them
+- **Save a backup file** (a CSV spreadsheet) to bring to a doctor's
+  appointment or keep as a backup
+- **Restore from a backup file** to bring back missing readings or move them
   to a new device
-- **Backup reminder:** once there are 10 or more readings, the app suggests an
-  export if there hasn't been one in the last 30 days
-- **More than one person:** each person gets their own readings. Tap **⋯**
-  next to the name to rename or delete a person.
+- **Backup reminder:** once there are 10 or more readings, the app suggests
+  saving a backup file if there hasn't been one in the last 30 days
+- **More than one person:** each person gets their own readings. Tap **Edit**
+  next to the name to rename or delete a person, or **Add person**.
 - **Install it like an app on iPhone and Android:** it gets its own home-screen
   icon, opens full-screen and works without a connection
   (see [Installing on a phone](#installing-on-a-phone))
@@ -78,8 +86,8 @@ Installing needs the web address (https), so do it from the Vercel site.
 - **iPhone and iPad** (Safari): tap the **Share** button, then **Add to Home
   Screen**. The home-screen app keeps its **own** copy of your readings,
   separate from Safari's. If you've already logged readings in Safari, tap
-  **Export CSV** there first, then open the new app and tap **Restore from
-  file**.
+  **Save a backup file** there first, then open the new app and tap **Restore
+  from a backup file**.
 
 Once installed, the app opens from its icon like any other app and works
 without a connection. Updates arrive on their own: after you publish a change,
@@ -90,18 +98,19 @@ it shows up the second time the app is opened.
 - **Readings live in the browser you log them in.** A phone and a computer each
   keep their own readings, and so do different browsers on the same device.
   The website and `localhost:8000` count separately too.
-- **Export now and then as a backup.** Clearing your browser's history or site
+- **Save a backup file now and then.** Clearing your browser's history or site
   data deletes the readings. On an iPhone, Safari can also clear a website's
   data after about a week without a visit. Installing it on the Home Screen
   (see [Installing on a phone](#installing-on-a-phone)) and opening it from
   there avoids that.
-- **Export CSV** (above the reading history) downloads every reading for the
-  selected person, oldest first, with date, time, numbers, category, position,
-  tags and notes.
-- **Restore** reads an exported CSV and adds any readings that aren't already
-  on the device. Readings already there are skipped, so restoring the same file
-  twice is harmless. On a new device, tap **Restore from file** on the welcome
-  screen and it sets up the person for you. Files re-saved by Excel work too.
+- **Save a backup file** (in the "Keep a copy" card) downloads a CSV file with
+  every reading for the selected person, oldest first, with date, time,
+  numbers, category, position, tags and notes.
+- **Restore from a backup file** reads that CSV file and adds any readings that
+  aren't already on the device. Readings already there are skipped, so
+  restoring the same file twice is harmless. On a new device, tap it on the
+  welcome screen and it sets up the person for you. Files re-saved by Excel
+  work too.
 - Exported `.csv` files are listed in `.gitignore`, so they're never committed.
 
 ## Deploying to Vercel

@@ -227,7 +227,7 @@ async function deletePerson() {
     const sure = await ask({
         title: "Delete " + name + "?",
         message: "This deletes " + name + " and " + plural(count, "reading") + " from this device, and it "
-            + "can't be undone. If you might want them later, export a CSV first.",
+            + "can't be undone. If you might want them later, save a backup file first.",
         button: "Delete",
         danger: true,
         typeToConfirm: name,
@@ -317,13 +317,18 @@ function offerSession(saved) {
     if (hasBoth && session.count < 3) {
         const another = el("button", "compact", session.count === 1 ? "Take another in 1 minute" : "Take a third in 1 minute");
         another.type = "button";
-        another.onclick = startSessionWait;
+        another.onclick = () => startSessionWait(false);
         box.append(another);
     }
     clearTimeout(statusTimer);  // keep the offer and average on screen until the next action
 }
 
-function startSessionWait() {
+// fresh: the next reading starts its own session (a retake after a very high reading)
+function startSessionWait(fresh) {
+    if (fresh) {
+        session.id = newId();
+        session.count = 0;
+    }
     session.joining = true;
     session.readyAt = Date.now() + 60000;
     showStatus("", false);
@@ -331,18 +336,28 @@ function startSessionWait() {
     sessionTick();
     clearInterval(session.timer);
     session.timer = setInterval(sessionTick, 1000);
+    reveal($("session"));
 }
 
 function sessionTick() {
     const left = Math.ceil((session.readyAt - Date.now()) / 1000);
+    const retake = session.count === 0;
     if (left > 0) {
-        $("session-text").textContent = "Sit still and relax. Reading " + (session.count + 1) + " in 0:"
-            + String(left).padStart(2, "0") + ".";
+        $("session-text").textContent = "Sit still and relax. " + (retake ? "Measure again" : "Reading " + (session.count + 1))
+            + " in 0:" + String(left).padStart(2, "0") + ".";
         return;
     }
     stopSessionWait(false);
-    showStatus("Time for reading " + (session.count + 1) + ". Take it now, then enter the numbers above.", false);
+    showStatus((retake ? "Time to measure again" : "Time for reading " + (session.count + 1))
+        + ". Take it now, then enter the numbers above.", false);
     $("q-systolic").focus();
+}
+
+// Scrolls just enough to show el whole. Used after saving, when the message
+// under the Save button could otherwise sit below the bottom of the screen.
+function reveal(el) {
+    const r = el.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > visualViewport.height) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 // Hides the countdown. end: the next reading starts a new session.
@@ -358,6 +373,17 @@ function resetQuickTime() {
     quick.timeTouched = false;
     $("q-when").value = nowLocal();
     $("q-when").max = nowLocal();
+    $("q-when-now").hidden = false;
+    $("q-when-pick").hidden = true;
+}
+
+// The "More details" line names what's already chosen, so a remembered position is never hidden
+function renderMoreText() {
+    const chosen = [];
+    if (quick.position) chosen.push(options.positions[quick.position]);
+    quick.tags.forEach((t) => chosen.push(options.tags[t]));
+    if ($("q-note").value.trim()) chosen.push("note");
+    $("q-more-text").textContent = chosen.length ? "More details: " + chosen.join(", ") : "Add a note, position or tags";
 }
 
 function saveQuick(force) {
@@ -391,9 +417,12 @@ function saveQuick(force) {
     $("q-note").value = "";
     quick.tags.clear();  // the position is kept for next time; tags are per reading
     renderDetails($("q-details"), quick);
+    renderMoreText();
     resetQuickTime();
+    document.activeElement.blur();  // close the phone keyboard so the message below Save shows
     afterSave(result, quick.position);
     offerSession(result.readings[0]);
+    if (!result.crisis) reveal($("status"));  // the alert takes the scroll instead
 }
 
 // ---------- Shared display helpers ----------
@@ -429,7 +458,9 @@ function loadAll(resetPage) {
     const readings = readingsFor(profileId);
     totalReadings = readings.length;
     latestReading = readings[0] || null;
+    $("summary").hidden = !latestReading;
     renderLatest();
+    renderWeek(readings);
     renderStats(statsFor(profileId));
     renderTarget(readings);
     renderTrend(readings);
@@ -448,6 +479,16 @@ function renderLatest() {
     const r = latestReading;
     box.replaceChildren(el("span", "", "Latest"), el("strong", "", bpText(r)), badge(r.category),
         el("span", "muted", agoText(r.taken_at)));
+}
+
+// "Last 7 days 131/82 ● Stage 1 high · 12 readings", under the latest reading
+function renderWeek(readings) {
+    const avg = averagesFor(readings, 7);
+    const box = $("week");
+    box.hidden = avg.systolic === null || avg.diastolic === null;
+    if (box.hidden) return;
+    box.replaceChildren(el("span", "", "Last 7 days"), el("strong", "", avg.systolic + "/" + avg.diastolic),
+        badge(avg.category), el("span", "muted", plural(avg.count, "reading")));
 }
 
 // "just now", "5 minutes ago", "3 hours ago", "yesterday", "4 days ago", then the date
@@ -477,8 +518,7 @@ function dayText(iso) {
     return d.toLocaleDateString([], opts);
 }
 
-// Under the averages: how the last 30 days compare with the doctor's target,
-// or a way to add one
+// At the top: how the last 30 days compare with the doctor's target, or a way to add one
 function renderTarget(readings) {
     const box = $("target-line");
     const target = targetFor(profileId);
@@ -521,15 +561,14 @@ function renderTrend(readings) {
 function loadHistory(readings) {
     const all = readings || readingsFor(profileId);
     const shown = filterReadings(all, historyFilter);
-    const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+    const rows = historyRows(shown, sessionAverages(all));
+    const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
     historyPage = Math.min(historyPage, pages - 1);  // e.g. after deleting the last reading on a page
-    const first = historyPage * PAGE_SIZE;
-    const page = shown.slice(first, first + PAGE_SIZE);
-    renderHistory(page, sessionAverages(all));
+    renderHistory(rows.slice(historyPage * PAGE_SIZE, (historyPage + 1) * PAGE_SIZE));
     $("filter-wrap").hidden = all.length < 2 && historyFilter === "all";
     $("recent-empty").textContent = all.length ? "No readings match. Choose another filter above." : "Nothing saved yet.";
-    $("pager").hidden = shown.length <= PAGE_SIZE;
-    $("page-info").textContent = (first + 1) + "–" + (first + page.length) + " of " + shown.length;
+    $("pager").hidden = pages === 1;
+    $("page-info").textContent = "Page " + (historyPage + 1) + " of " + pages;
     $("newer").disabled = historyPage === 0;
     $("older").disabled = historyPage >= pages - 1;
 
@@ -572,60 +611,54 @@ function renderStats(periods) {
     });
 }
 
-// sessions: from sessionAverages(), to show "Reading 2 of 3 · average 126/81"
-function renderHistory(readings, sessions) {
+// rows: from historyRows(). A session's row shows its average, then each of its
+// readings. Tapping a reading opens it for editing (and deleting).
+function renderHistory(rows) {
     const ul = $("recent");
     ul.replaceChildren();
-    $("recent-empty").hidden = readings.length > 0;
+    $("recent-empty").hidden = rows.length > 0;
     let lastDay = null;
-    readings.forEach((r) => {
-        const day = dayText(r.taken_at);
+    rows.forEach(({ readings, session }) => {
+        const day = dayText(readings[0].taken_at);
         if (day !== lastDay) {
             ul.appendChild(el("li", "day-head", day));
             lastDay = day;
         }
-        const li = document.createElement("li");
-        const text = document.createElement("div");
-        const line = document.createElement("div");
-        line.className = "reading-line";
-        const main = document.createElement("span");
-        main.className = "big";
-        main.textContent = bpText(r);
-        line.append(main, badge(r.category));
-
-        const extra = [new Date(r.taken_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })];
-        if (r.position && options.positions[r.position]) extra.push(options.positions[r.position]);
-        const tags = r.tags.filter((t) => options.tags[t]).map((t) => options.tags[t]);
-        if (tags.length) extra.push(tags.join(", "));
-        const when = document.createElement("div");
-        when.className = "muted";
-        when.textContent = extra.join(" · ");
-        text.append(line, when);
-        const session = r.session && sessions[r.session];
+        const li = el("li", "entry");
         if (session) {
+            li.classList.add("session-group");
+            const head = el("div", "session-head");
             const avg = session.systolic !== null && session.diastolic !== null
-                ? "average " + session.systolic + "/" + session.diastolic : "";
-            text.appendChild(el("div", "session-line", "Reading " + (session.ids.indexOf(r.id) + 1) + " of "
-                + session.ids.length + (avg ? " · " + avg : "")));
+                ? session.systolic + "/" + session.diastolic : "—";
+            head.append(el("span", "", "Average of " + session.count + ": "), el("strong", "", avg), badge(session.category));
+            li.appendChild(head);
         }
-        if (r.note) text.appendChild(el("div", "note", r.note));
-
-        const edit = el("button", "link", "Edit");
-        edit.type = "button";
-        edit.setAttribute("aria-label", "Edit " + bpText(r) + ", " + whenText(r.taken_at));
-        edit.onclick = () => editReading(r);
-        const del = el("button", "link danger", "Delete");
-        del.type = "button";
-        del.setAttribute("aria-label", "Delete " + bpText(r) + ", " + whenText(r.taken_at));
-        del.onclick = () => removeReading(r);
-        const actions = el("div", "row-actions");
-        actions.append(edit, del);
-        li.append(text, actions);
+        // Oldest first inside a session, the order they were taken
+        (session ? [...readings].reverse() : readings).forEach((r) => li.appendChild(readingButton(r)));
         ul.appendChild(li);
     });
 }
 
-// Deletes straight away, with a few seconds to undo
+// One reading in the history: numbers, category, time and details, as one big button
+function readingButton(r) {
+    const button = el("button", "reading");
+    button.type = "button";
+    button.onclick = () => editReading(r);
+    const text = el("span", "reading-text");
+    const line = el("span", "reading-line");
+    line.append(el("span", "big", bpText(r)), badge(r.category));
+    const extra = [new Date(r.taken_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })];
+    if (r.position && options.positions[r.position]) extra.push(options.positions[r.position]);
+    const tags = r.tags.filter((t) => options.tags[t]).map((t) => options.tags[t]);
+    if (tags.length) extra.push(tags.join(", "));
+    text.append(line, el("span", "muted", extra.join(" · ")));
+    if (r.note) text.appendChild(el("span", "note", r.note));
+    const hint = el("span", "edit-hint", "Edit ›");
+    hint.setAttribute("aria-hidden", "true");
+    button.append(text, hint);
+    return button;
+}
+
 // Asks first, then deletes, with a few seconds to undo as well
 async function removeReading(r) {
     const sure = await ask({
@@ -662,6 +695,8 @@ async function editReading(r) {
     editDetails.tags = new Set(r.tags);
     renderDetails($("e-details"), editDetails);
     $("e-check").hidden = true;
+    let remove = false;
+    $("edit-delete").onclick = () => { remove = true; $("edit-dialog").close(); };
 
     let force = false;
     const saved = await openDialog("edit", () => {
@@ -686,6 +721,7 @@ async function editReading(r) {
         loadAll();
         toast("Reading updated.");
     }
+    if (remove) await removeReading(r);
 }
 
 // ---------- Backup reminder ----------
@@ -699,8 +735,8 @@ function renderBackupNudge() {
     if (!due) return;
     $("backup-text").textContent = (days === null
         ? "These " + totalReadings + " readings are only saved in this browser, and there's no copy yet."
-        : "The last export was " + days + " days ago.")
-        + " Clearing the browser's data would delete them. Export a CSV file and keep it somewhere safe.";
+        : "The last backup file was saved " + days + " days ago.")
+        + " Clearing the browser's data would delete them. Save a backup file and keep it somewhere safe.";
 }
 
 function snoozeBackup() {
@@ -914,10 +950,19 @@ Object.entries(COMPLETE_AT).forEach(([key, twoDigitMin]) => {
         if (v.length >= 3 || (v.length === 2 && Number(v) >= twoDigitMin)) $("q-" + NEXT_FIELD[key]).focus();
     });
 });
-$("q-when").oninput = () => { quick.timeTouched = true; };
+function showWhenPicker() {
+    $("q-when-now").hidden = true;
+    $("q-when-pick").hidden = false;
+}
+$("q-when").oninput = () => { quick.timeTouched = true; showWhenPicker(); };
+$("q-when-change").onclick = () => { showWhenPicker(); $("q-when").focus(); };
+// Chip taps and typing in the note update the "More details" line
+["click", "input"].forEach((type) => $("q-more").addEventListener(type, renderMoreText));
 $("quick-mode").addEventListener("input", () => { $("q-check").hidden = true; });  // numbers changed: check again on save
 $("edit-form").addEventListener("input", () => { $("e-check").hidden = true; });
 $("crisis-close").onclick = () => { $("crisis").hidden = true; };
+// The retake gets its own session, so it isn't averaged with the very high reading
+$("crisis-timer").onclick = () => startSessionWait(true);
 $("add-profile").onclick = () => openPersonDialog();
 $("edit-profile").onclick = () => editPerson();
 $("welcome-form").onsubmit = (e) => {
@@ -1015,6 +1060,7 @@ function start() {
         $("history-filter").appendChild(o);
     });
     renderDetails($("q-details"), quick);
+    renderMoreText();
     resetQuickTime();
     renderProfiles();
 }

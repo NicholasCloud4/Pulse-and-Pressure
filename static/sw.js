@@ -3,7 +3,7 @@
 // they live in the page's localStorage (see data.js).
 //
 // Change VERSION whenever the list of files below changes.
-const VERSION = "v2";
+const VERSION = "v3";
 const CACHE = "pulse-pressure-" + VERSION;
 const FILES = [
     "./",

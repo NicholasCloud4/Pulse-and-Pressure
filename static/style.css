@@ -102,6 +102,12 @@ h2 {
     display: flex;
     gap: 8px;
     align-items: center;
+    width: 100%;
+}
+
+.who select {
+    flex: 1;
+    min-width: 0;
 }
 
 .card {
@@ -172,11 +178,6 @@ button.compact {
     font-size: 0.95rem;
 }
 
-.head-actions {
-    display: flex;
-    gap: 8px;
-}
-
 button.primary {
     background: var(--accent);
     color: var(--on-accent);
@@ -196,11 +197,12 @@ button.small {
 }
 
 button.link {
-    min-height: 40px;
+    min-height: 44px;
+    min-width: 44px;
     border: none;
     background: none;
     color: var(--accent);
-    padding: 0 6px;
+    padding: 0 8px;
 }
 
 button.danger {
@@ -222,6 +224,49 @@ button.primary.destructive {
 
 .actions .primary {
     flex: 1;
+}
+
+/* "When: Now  Change" in place of the date picker */
+.when-now {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+/* Note, position and tags, folded away until wanted */
+.more {
+    margin-top: 4px;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+}
+
+.more summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 48px;
+    cursor: pointer;
+    color: var(--accent);
+    list-style: none;
+}
+
+.more summary::-webkit-details-marker {
+    display: none;
+}
+
+.more summary::before {
+    content: "\25B8";
+    width: 1em;
+}
+
+.more[open] summary::before {
+    content: "\25BE";
+}
+
+.more[open] {
+    padding-bottom: 12px;
 }
 
 /* Position and tag choices */
@@ -387,22 +432,32 @@ button.primary.destructive {
 /* Stats */
 .stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
 }
 
 .tile {
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 10px 12px;
+    padding: 8px 10px;
     display: flex;
     flex-direction: column;
     gap: 2px;
 }
 
 .tile .value {
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     font-weight: 600;
+}
+
+/* Three tiles share a 360px row, so a long category label wraps beside its dot */
+.tile .badge {
+    white-space: normal;
+    align-items: flex-start;
+}
+
+.tile .badge .dot {
+    margin-top: 0.35em;
 }
 
 /* Trend chart */
@@ -587,9 +642,55 @@ li:first-child {
     padding: 0 14px;
 }
 
-.row-actions {
+/* History: each reading is one button that opens it for editing */
+li.entry {
+    display: block;
+    padding: 0;
+}
+
+button.reading {
     display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    min-height: 56px;
+    padding: 10px 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+    text-align: start;
+}
+
+.reading-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.edit-hint {
     flex: none;
+    color: var(--accent);
+    font-size: 0.95rem;
+}
+
+/* Readings taken a minute apart: their average, then each reading */
+.session-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 8px;
+    padding: 10px 0 2px;
+}
+
+.session-group button.reading {
+    min-height: 48px;
+    padding: 6px 0 6px 12px;
+    border-left: 3px solid var(--border);
+}
+
+.session-group button.reading .big {
+    font-size: 1rem;
 }
 
 .note {
@@ -676,14 +777,17 @@ dialog .remove-area {
     border-top: 1px solid var(--border);
 }
 
-/* "Latest: 128/82 ● Stage 1 high · 2 hours ago" */
+/* How you're doing: "Latest 128/82 ● Stage 1 high · 2 hours ago", the last 7 days, the target */
+.summary {
+    padding: 12px 16px;
+}
+
 .latest {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 2px 8px;
-    margin: 0 0 12px;
-    padding: 0 4px;
+    margin: 0 0 4px;
 }
 
 /* Taking 2 or 3 readings a minute apart */
@@ -707,13 +811,9 @@ dialog .remove-area {
     margin-left: 4px;
 }
 
-.session-line {
-    font-size: 0.9rem;
-}
-
-/* Target under the averages */
+/* Target from the doctor, in the summary */
 .target-line {
-    margin: 10px 0 0;
+    margin: 0;
     font-size: 0.95rem;
 }
 

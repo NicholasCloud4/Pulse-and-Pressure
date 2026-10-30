@@ -56,7 +56,7 @@ export default async function main({ js, waitFor, check, shot, sleep, send, navi
     check("past time saves", (await js(`return t.stored().readings.length`)) === 3);
 
     // --- Edit a reading ---
-    await js(`[...document.querySelectorAll("#recent li")].find((li) => li.textContent.includes("300/82")).querySelector(".row-actions .link").click()`);
+    await js(`[...document.querySelectorAll("#recent button.reading")].find((b) => b.textContent.includes("300/82")).click()`);
     check("Edit opens the window filled in", await js(`return document.getElementById("edit-dialog").open && document.getElementById("e-systolic").value === "300"`));
     await shot("04-edit");
     await js(`t.set("e-systolic", "130"); t.set("e-note", "typo fixed"); document.getElementById("edit-form").requestSubmit()`);
@@ -64,18 +64,21 @@ export default async function main({ js, waitFor, check, shot, sleep, send, navi
     check("edit saves and closes", await js(`return !document.getElementById("edit-dialog").open && t.text("toast-text") === "Reading updated."`));
     check("edited values stored", await js(`const r = t.stored().readings.find((x) => x.note === "typo fixed"); return !!r && r.systolic === 130`));
     // Editing to an unusual value shows the check inside the window
-    await js(`document.querySelector("#recent li .row-actions .link").click(); t.set("e-diastolic", "20"); document.getElementById("edit-form").requestSubmit()`);
+    await js(`document.querySelector("#recent button.reading").click(); t.set("e-diastolic", "20"); document.getElementById("edit-form").requestSubmit()`);
     check("edit warns about unusual numbers", await js(`return document.getElementById("edit-dialog").open && t.vis("e-check")`));
     await js(`[...document.querySelectorAll("#e-check button")].find((b) => b.textContent === "Save anyway").click()`);
     await sleep(100);
     check("edit Save anyway saves", await js(`return !document.getElementById("edit-dialog").open && t.stored().readings.some((r) => r.diastolic === 20)`));
-    await js(`document.querySelector("#recent li .row-actions .link").click(); t.set("e-diastolic", "80"); t.set("e-when", ""); document.getElementById("edit-form").requestSubmit()`);
+    await js(`document.querySelector("#recent button.reading").click(); t.set("e-diastolic", "80"); t.set("e-when", ""); document.getElementById("edit-form").requestSubmit()`);
     check("edit requires a time", (await js(`return t.text("edit-error")`)).includes("date and time"));
     await js(`t.click("edit-cancel")`);
 
-    // --- Delete: confirm first, then undo ---
+    // --- Delete: from the edit window, confirm first, then undo ---
     const before = await js(`return t.stored().readings.length`);
-    await js(`document.querySelector("#recent li .row-actions .danger").click()`);
+    check("history rows have no Delete button", await js(`return ![...document.querySelectorAll("#recent button")].some((b) => /delete/i.test(b.textContent))`));
+    await js(`window.deleteFirst = async () => { document.querySelector("#recent button.reading").click(); t.click("edit-delete");
+      for (let i = 0; i < 50 && !document.getElementById("ask-dialog").open; i++) await new Promise((r) => setTimeout(r, 20)); };
+      await deleteFirst()`);
     const asked = await js(`return { open: document.getElementById("ask-dialog").open, title: t.text("ask-title"), message: t.text("ask-message"),
       button: t.text("ask-ok"), red: document.getElementById("ask-ok").classList.contains("destructive"), focus: document.activeElement.id, count: t.stored().readings.length }`);
     check("Delete asks first and deletes nothing yet", asked.open && asked.title === "Delete this reading?" && asked.button === "Delete" && asked.red && asked.count === before, asked);
@@ -85,7 +88,7 @@ export default async function main({ js, waitFor, check, shot, sleep, send, navi
     await js(`t.click("ask-cancel")`);
     await waitFor(`return !document.getElementById("ask-dialog").open`);
     check("Cancel keeps the reading", (await js(`return t.stored().readings.length`)) === before);
-    await js(`document.querySelector("#recent li .row-actions .danger").click(); document.getElementById("ask-form").requestSubmit()`);
+    await js(`await deleteFirst(); document.getElementById("ask-form").requestSubmit()`);
     await waitFor(`return t.stored().readings.length === ${before - 1}`);
     check("confirming deletes it, with Undo", (await js(`return t.stored().readings.length`)) === before - 1 && await js(`return t.vis("toast") && t.text("toast-action") === "Undo"`));
     await shot("05-undo");
@@ -153,7 +156,7 @@ export default async function main({ js, waitFor, check, shot, sleep, send, navi
       loadAll(true);`);
     await shot("09-light-full");
     await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "dark" }] });
-    await js(`document.querySelector("#recent li .row-actions .danger").click(); document.getElementById("ask-form").requestSubmit()`);
+    await js(`await deleteFirst(); document.getElementById("ask-form").requestSubmit()`);
     await waitFor(`return !document.getElementById("ask-dialog").open`);
     await shot("10-dark-full");
     await js(`t.quick("300", "82", "71")`);

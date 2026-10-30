@@ -20,7 +20,7 @@ const NAMES = [
     "averagesFor", "statsFor", "exportCsv", "exportFileName", "csvSafe",
     "parseCsv", "parseDate", "parseTime", "importCsv", "reportFor",
     "cleanTarget", "setTarget", "targetFor", "isOnTarget", "targetStats", "sessionAverages",
-    "historyFilters", "filterReadings",
+    "historyFilters", "filterReadings", "historyRows",
 ];
 
 // const/let aren't properties of the context, so collect them at the end of the script
@@ -485,6 +485,27 @@ describe("measurement sessions", () => {
         assert.deepEqual([sessions.s1.count, sessions.s1.systolic, sessions.s1.diastolic, sessions.s1.pulse], [2, 128, 82, 69]);
         assert.deepEqual(plain(sessions.s1.ids), [first.id, second.id]);
         assert.equal(api.saved().readings.find((r) => r.systolic === 118).session, undefined);
+    });
+
+    test("history rows put a session's readings in one row, where its newest reading is", () => {
+        const api = load();
+        const p = api.addProfile("Ann");
+        const add = (minutesAgo, systolic, session) => api.addReadings(p.id,
+            [{ systolic, diastolic: 80, pulse: null, taken_at: api.toLocalIso(Date.now() - minutesAgo * 60000) }], { session });
+        add(1, 121, "x");    // a single reading with its own session id
+        add(10, 131, "s1");
+        add(11, 132, "s1");
+        add(12, 133, "s1");
+        add(60, 141, null);  // no session at all
+        const all = api.readingsFor(p.id);
+        const sessions = api.sessionAverages(all);
+        const shape = (rows) => plain(rows.map((row) => [row.readings.map((r) => r.systolic), row.session ? row.session.count : null]));
+
+        assert.deepEqual(shape(api.historyRows(all, sessions)), [[[121], null], [[131, 132, 133], 3], [[141], null]]);
+        // A filter can leave part of a session: it's still one row, with the whole session's average
+        const some = all.filter((r) => r.systolic !== 132);
+        assert.deepEqual(shape(api.historyRows(some, sessions)), [[[121], null], [[131, 133], 3], [[141], null]]);
+        assert.equal(api.historyRows(some, sessions)[1].session.systolic, 132);
     });
 });
 

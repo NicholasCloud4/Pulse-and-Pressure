@@ -45,12 +45,15 @@ export default async function features({ js, waitFor, check, shot, send, navigat
       $$("q-systolic").value = "121"; $$("q-diastolic").value = "78"; $$("q-save").click()`);
     status = await js(`return $$("status").textContent`);
     check("third reading: average of 3 and no more offers", status.includes("Average of 3: 125/80") && !status.includes("Take"), status);
-    const labels = await js(`return [...document.querySelectorAll("#recent .session-line")].map((e) => e.textContent)`);
-    check("history labels the session's readings",
-        labels.join("|") === "Reading 3 of 3 · average 125/80|Reading 2 of 3 · average 125/80|Reading 1 of 3 · average 125/80", labels);
+    const group = await js(`const g = document.querySelector("#recent .session-group");
+      return { head: g.querySelector(".session-head").textContent, readings: [...g.querySelectorAll("button.reading .big")].map((e) => e.textContent) }`);
+    check("history shows the session as one row: its average, then each reading in the order taken",
+        group.head.startsWith("Average of 3: 125/80") && group.readings.join("|") === "129/82 · pulse 71|125/80 · pulse 69|121/78", group);
     await js(`$$("q-systolic").value = "140"; $$("q-diastolic").value = "90"; $$("q-save").click()`);
     check("saving without Take another starts a new session",
-        (await js(`return document.querySelectorAll("#recent .session-line").length`)) === 3 && !!(await js(`return !!statusButton("Take another")`)));
+        (await js(`return document.querySelectorAll("#recent .session-group").length`)) === 1
+        && (await js(`return !document.querySelector("#recent li.entry").classList.contains("session-group")`))
+        && !!(await js(`return !!statusButton("Take another")`)));
     await js(`statusButton("Take another").click(); $$("session-stop").click()`);
     check("Stop ends the wait", await js(`return !vis("session")`));
 

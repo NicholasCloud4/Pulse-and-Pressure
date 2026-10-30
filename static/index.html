@@ -26,10 +26,8 @@
             <h1>Pulse &amp; Pressure</h1>
             <div id="who" class="who" hidden>
                 <select id="profile" aria-label="Whose readings"></select>
-                <button id="edit-profile" class="small" type="button" aria-label="Rename or remove this person"
-                    title="Rename or remove this person">&#8943;</button>
-                <button id="add-profile" class="small" type="button" aria-label="Add a person"
-                    title="Add a person">+</button>
+                <button id="edit-profile" class="small" type="button">Edit</button>
+                <button id="add-profile" class="small" type="button">Add person</button>
             </div>
         </div>
 
@@ -47,8 +45,8 @@
                     <button class="primary" type="submit">Get started</button>
                 </div>
             </form>
-            <p class="muted">Already have readings in an exported file? Restore them onto this device.</p>
-            <button class="restore compact" type="button">Restore from file</button>
+            <p class="muted">Already have readings in a backup file? Restore them onto this device.</p>
+            <button class="restore compact" type="button">Restore from a backup file</button>
         </section>
 
         <section id="crisis" class="card crisis" role="alert" hidden>
@@ -64,11 +62,18 @@
             </ul>
             <p>If you feel fine, <strong>wait at least 1 minute, then measure again.</strong> If it's still this
                 high, contact your doctor as soon as possible.</p>
-            <button id="crisis-close" type="button">I understand</button>
+            <div class="actions">
+                <button id="crisis-timer" class="primary" type="button">Start 1-minute timer</button>
+                <button id="crisis-close" type="button">I understand</button>
+            </div>
         </section>
 
         <div id="person-view" hidden>
-            <p id="latest" class="latest" hidden></p>
+            <section id="summary" class="card summary" aria-label="How you're doing" hidden>
+                <p id="latest" class="latest"></p>
+                <p id="week" class="latest"></p>
+                <p id="target-line" class="target-line"></p>
+            </section>
             <section id="entry" class="card">
                 <h2>Log a reading</h2>
                 <div id="quick-mode">
@@ -80,10 +85,16 @@
                         <label>Pulse<input id="q-pulse" type="number" inputmode="numeric" min="0" step="1"
                                 enterkeyhint="done"></label>
                     </div>
-                    <label>When<input id="q-when" type="datetime-local"></label>
-                    <label class="spaced">Note (optional)<input id="q-note" type="text" maxlength="200"
-                            autocomplete="off" enterkeyhint="done" placeholder="Like: left arm, felt dizzy"></label>
-                    <div id="q-details" class="details"></div>
+                    <p id="q-when-now" class="when-now">When: <strong>Now</strong>
+                        <button id="q-when-change" class="link" type="button">Change</button>
+                    </p>
+                    <label id="q-when-pick" hidden>When<input id="q-when" type="datetime-local"></label>
+                    <details id="q-more" class="more">
+                        <summary id="q-more-text"></summary>
+                        <label>Note (optional)<input id="q-note" type="text" maxlength="200" autocomplete="off"
+                                enterkeyhint="done" placeholder="Like: left arm, felt dizzy"></label>
+                        <div id="q-details" class="details"></div>
+                    </details>
                     <div id="q-check" class="check" role="alert" hidden></div>
                     <div class="actions">
                         <button id="q-save" class="primary" type="button">Save reading</button>
@@ -103,7 +114,7 @@
                 <h2>Back up your readings</h2>
                 <p id="backup-text"></p>
                 <div class="actions">
-                    <button id="nudge-export" class="primary compact" type="button">Export CSV</button>
+                    <button id="nudge-export" class="primary compact" type="button">Save a backup file</button>
                     <button id="nudge-later" class="compact" type="button">Not now</button>
                 </div>
             </section>
@@ -111,7 +122,6 @@
             <section class="card">
                 <h2>Averages</h2>
                 <div id="stats" class="stats"></div>
-                <p id="target-line" class="target-line"></p>
             </section>
 
             <section class="card">
@@ -127,8 +137,8 @@
                 <p id="chart-empty" class="muted">Save at least two readings to see a trend.</p>
                 <div id="chart-wrap" hidden>
                     <div class="legend">
-                        <span><i class="key sys"></i>Systolic</span>
-                        <span><i class="key dia"></i>Diastolic</span>
+                        <span><i class="key sys"></i>Top number</span>
+                        <span><i class="key dia"></i>Bottom number</span>
                         <span><i class="key pulse"></i>Pulse</span>
                         <span><i class="key ref"></i><span id="ref-label">High from 130/80</span></span>
                     </div>
@@ -140,15 +150,7 @@
             </section>
 
             <section id="history" class="card">
-                <div class="card-head">
-                    <h2>Recent readings</h2>
-                    <div class="head-actions">
-                        <button id="export" class="compact" type="button" hidden>Export CSV</button>
-                        <button class="restore compact" type="button">Restore</button>
-                    </div>
-                </div>
-                <p class="muted">Readings are saved only in this browser, on this device. Export a file now and then
-                    as a backup. Restore adds back any readings from a file that are missing here.</p>
+                <h2>Your readings</h2>
                 <label id="filter-wrap" class="filter">Show<select id="history-filter"></select></label>
                 <p id="filter-summary" class="filter-summary" hidden></p>
                 <p id="recent-empty" class="muted">Nothing saved yet.</p>
@@ -174,12 +176,23 @@
                 </div>
             </section>
 
+            <section id="backup" class="card">
+                <h2>Keep a copy</h2>
+                <p class="muted">Readings are saved only in this browser, on this device. Save a backup file now and
+                    then. Restoring adds back any readings from a backup file that are missing here.</p>
+                <div class="actions">
+                    <button id="export" class="compact" type="button" hidden>Save a backup file</button>
+                    <button class="restore compact" type="button">Restore from a backup file</button>
+                </div>
+            </section>
+
             <section id="install" class="card" hidden>
                 <h2>Put it on your home screen</h2>
                 <p id="install-text"></p>
                 <p id="install-move" class="muted" hidden>On iPhone and iPad, the home-screen app keeps its own
-                    copy of your readings, separate from the browser. Tap <strong>Export CSV</strong> above first,
-                    then open the app from your home screen and tap <strong>Restore from file</strong>.</p>
+                    copy of your readings, separate from the browser. Tap <strong>Save a backup file</strong> above
+                    first, then open the app from your home screen and tap <strong>Restore from a backup
+                        file</strong>.</p>
                 <div class="actions">
                     <button id="install-go" class="primary compact" type="button" hidden>Install</button>
                     <button id="install-later" class="compact" type="button">Not now</button>
@@ -242,6 +255,9 @@
             <div class="actions">
                 <button class="primary" type="submit">Save changes</button>
                 <button id="edit-cancel" type="button">Cancel</button>
+            </div>
+            <div class="remove-area">
+                <button id="edit-delete" class="link danger" type="button">Delete this reading</button>
             </div>
         </form>
     </dialog>

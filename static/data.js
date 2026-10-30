@@ -370,6 +370,26 @@ function sessionAverages(readings) {
     return sessions;
 }
 
+// The history list's rows, given readings newest first and sessionAverages() of all
+// of them: one row per reading, except that a session's readings share one row,
+// placed where its newest reading is. Each row is { readings, session } where
+// session is that session's averages, or null for a reading on its own.
+function historyRows(readings, sessions) {
+    const rows = [];
+    const bySession = {};
+    readings.forEach((r) => {
+        const session = sessions[r.session] || null;
+        if (session && bySession[r.session]) {
+            bySession[r.session].readings.push(r);
+            return;
+        }
+        const row = { readings: [r], session };
+        if (session) bySession[r.session] = row;
+        rows.push(row);
+    });
+    return rows;
+}
+
 // ---------- Doctor report ----------
 // Everything the printed report shows, for the last `days` days (all readings when null)
 function reportFor(profileId, days) {

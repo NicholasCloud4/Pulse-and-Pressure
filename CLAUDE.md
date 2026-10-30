@@ -33,7 +33,10 @@ is no server code.
   with no packages. `run.mjs` serves `static/`, launches the browser and runs every
   `*.scenario.mjs` file. Helpers are in `cdp.mjs`. Scenarios drive the page through
   element ids and app globals (`addReadings`, `loadAll`, `profileId`…), so update them
-  when you rename those
+  when you rename those. `layout.scenario.mjs` holds the small-phone budget at
+  360x740 with a realistic amount of data: Save on the first screen, the save message
+  in view (also with the keyboard open), 44px controls, no jargon on screen. Anything
+  added above or inside the form has to keep it passing
 
 Scripts load in order `data.js` → `chart.js` → `app.js` as classic scripts sharing
 globals. There is no bundler, no npm and no build step.
