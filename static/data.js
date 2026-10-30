@@ -45,7 +45,7 @@ function categorize(systolic, diastolic) {
     return "normal";
 }
 
-// Same rules as looks_plausible() in parse_test.py
+// Numbers worth a second look before saving, in plain words
 function looksPlausible(r) {
     const problems = [];
     if (r.systolic !== null && !(r.systolic >= 70 && r.systolic <= 250)) {

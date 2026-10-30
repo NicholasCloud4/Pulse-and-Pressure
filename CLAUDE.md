@@ -10,13 +10,9 @@ used by non-technical people on phones. Readings live only in the browser's
 data is never sent anywhere. That privacy promise is the core of the app; don't
 add anything that sends readings off the device without asking first.
 
-Two ways it runs:
-- **Website / installed app (main use):** `static/` is the whole app. It's deployed
-  to Vercel with `static` as the root directory, and installs to the home screen on
-  iPhone and Android as a PWA.
-- **Local server (optional):** `python app.py` serves `static/` and adds the
-  "Type a note" tab, which reads free-text notes with a local model through Ollama
-  (`llama3.2:3b`). The tab stays hidden unless `/api/status` answers.
+`static/` is the whole app. It's deployed to Vercel with `static` as the root
+directory, and installs to the home screen on iPhone and Android as a PWA. There
+is no server code.
 
 ## Layout
 
@@ -38,11 +34,6 @@ Two ways it runs:
   `*.scenario.mjs` file. Helpers are in `cdp.mjs`. Scenarios drive the page through
   element ids and app globals (`addReadings`, `loadAll`, `profileId`…), so update them
   when you rename those
-- `app.py`: Flask server for local use and note parsing
-- `parse_test.py`: the note parser (despite the name, it's not a test). `looks_plausible()`
-  mirrors `looksPlausible()` in `data.js`, so keep the two in sync
-- `test_set.py` + `score.py`: model accuracy evaluation. `HOLDOUT` must stay unseen;
-  if the prompt is tuned on a holdout miss, replace the holdout notes
 
 Scripts load in order `data.js` → `chart.js` → `app.js` as classic scripts sharing
 globals. There is no bundler, no npm and no build step.
@@ -56,8 +47,9 @@ globals. There is no bundler, no npm and no build step.
   tags, note, note_shared, session? }`
   - `taken_at` is local time, `"YYYY-MM-DDTHH:MM"`
   - the numbers are integers or null
-  - `note_shared` means a typed note covered several readings, so it's left out of
-    the export and report
+  - `note_shared` means one note covered several readings saved together, so it's
+    left out of the export and report. Only the removed "Type a note" tab made
+    these, but older saved data still has them
   - `session` links readings taken a minute apart; their average is shown
 
 Small per-device preferences (the chosen person, chart range, snoozes) are separate
@@ -71,8 +63,6 @@ localStorage keys, set through `store()` and `recall()` in `app.js`.
   Edge or Chromium (or `CHROME_PATH`). Run both suites before committing UI changes
 - Serve the site like Vercel does: `python -m http.server 8000 -d static`, then open
   http://localhost:8000 (service workers need localhost or https)
-- Local server with note reading: `pip install flask`, `ollama pull llama3.2:3b`, `python app.py`
-- Model evaluation: `python score.py` (needs Ollama running)
 
 ## Rules and conventions
 

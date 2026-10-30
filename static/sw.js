@@ -3,7 +3,7 @@
 // they live in the page's localStorage (see data.js).
 //
 // Change VERSION whenever the list of files below changes.
-const VERSION = "v1";
+const VERSION = "v2";
 const CACHE = "pulse-pressure-" + VERSION;
 const FILES = [
     "./",
@@ -37,8 +37,8 @@ self.addEventListener("activate", (event) => {
 // opens instantly (even offline) and picks up updates on the next visit.
 self.addEventListener("fetch", (event) => {
     const url = new URL(event.request.url);
-    // Only this site's own files; note reading (/api/) always goes to the server
-    if (event.request.method !== "GET" || url.origin !== location.origin || url.pathname.includes("/api/")) return;
+    // Only this site's own files
+    if (event.request.method !== "GET" || url.origin !== location.origin) return;
 
     event.respondWith(caches.open(CACHE).then(async (cache) => {
         const saved = await cache.match(event.request, { ignoreSearch: true });

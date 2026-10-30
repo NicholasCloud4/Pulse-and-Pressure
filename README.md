@@ -1,9 +1,7 @@
 # Pulse and Pressure
 
 A private blood pressure and pulse log, built for a friend. Log a reading with a
-quick form, or (when running on your own computer) type or dictate it the way
-you'd write a phone note ("128 over 82, pulse 71, after coffee") and a small
-open-weight model turns it into clean data.
+quick form: three numbers, plus position and tags if you like.
 
 Readings are saved only on the device you use, in that browser's storage. There's
 no account, no database server and no API bill, and health data is never sent
@@ -11,9 +9,6 @@ anywhere.
 
 ## Features
 
-- **Two ways to log:** a quick form (three numbers plus tap-to-pick position
-  and tags) for everyday use, or a free-text note read by a local model (when
-  running on your own computer with Ollama)
 - **Position, tags and notes:** sitting / standing / lying down; medication
   taken, stressed, after exercise, caffeine; and an optional short note ("left
   arm", "felt dizzy"). The app remembers your usual position.
@@ -56,48 +51,25 @@ anywhere.
   (see [Installing on a phone](#installing-on-a-phone))
 - Works on phones and computers, in light and dark mode
 
-## Two ways to use it
-
-### 1. On the web
+## Using it
 
 The `static/` folder is a complete website on its own, and can be hosted for
 free on a static host like Vercel (see [Deploying to Vercel](#deploying-to-vercel)).
 Anyone who opens the address gets their own empty log, saved on their own
-device. The "Type a note" tab is hidden on the web, because it needs Ollama
-running on a computer.
+device.
 
-### 2. On your own computer (with note reading)
-
-You need:
-
-- **Python 3** with Flask: `pip install flask`
-- **[Ollama](https://ollama.com)** with the model: `ollama pull llama3.2:3b`
-  (only needed for the "Type a note" tab)
-
-Then, from this folder:
+To try it on your own computer instead, run this from this folder (Python 3,
+nothing to install) and open http://localhost:8000:
 
 ```
-python app.py
+python -m http.server 8000 -d static
 ```
 
-It prints two addresses:
-
-- **On this computer:** http://localhost:8000
-- **On your phone:** something like `http://192.168.1.77:8000`. The phone must
-  be on the same Wi-Fi.
-
-Type the address with `http://`, not `https://`. The app doesn't have a
-security certificate when running this way, so an `https://` address won't
-load. Leave the terminal open while you use the app, and press **Ctrl+C** to
-stop it.
-
-The phone address can change after the router or computer restarts. If it stops
-working, use the one `python app.py` prints when it starts.
+Press **Ctrl+C** to stop it.
 
 ## Installing on a phone
 
-Installing needs the web address (https), so do it from the Vercel site. A
-phone can't install from a home-network address like `http://192.168.1.77:8000`.
+Installing needs the web address (https), so do it from the Vercel site.
 
 - **Android** (Chrome, Edge or Samsung Internet): open the site and tap
   **Install** on the "Put it on your home screen" card. You can also use the
@@ -117,7 +89,7 @@ it shows up the second time the app is opened.
 
 - **Readings live in the browser you log them in.** A phone and a computer each
   keep their own readings, and so do different browsers on the same device.
-  The website, `localhost:8000` and the phone address each count separately too.
+  The website and `localhost:8000` count separately too.
 - **Export now and then as a backup.** Clearing your browser's history or site
   data deletes the readings. On an iPhone, Safari can also clear a website's
   data after about a week without a visit. Installing it on the Home Screen
@@ -125,8 +97,7 @@ it shows up the second time the app is opened.
   there avoids that.
 - **Export CSV** (above the reading history) downloads every reading for the
   selected person, oldest first, with date, time, numbers, category, position,
-  tags and notes. A note typed with several readings in it is left out of the
-  export, since those numbers already have their own rows.
+  tags and notes.
 - **Restore** reads an exported CSV and adds any readings that aren't already
   on the device. Readings already there are skipped, so restoring the same file
   twice is harmless. On a new device, tap **Restore from file** on the welcome
@@ -143,8 +114,7 @@ it shows up the second time the app is opened.
 6. Choose **Deploy**. Vercel gives you an address like
    `https://pulse-and-pressure.vercel.app`.
 
-From then on, every push to GitHub updates the website automatically. Because
-only `static/` is deployed, `app.py` and the parser files never run on Vercel.
+From then on, every push to GitHub updates the website automatically.
 
 ## Blood pressure categories
 
@@ -179,37 +149,6 @@ trouble speaking. The app can't know about symptoms, so its alert covers both.
   files so it opens offline. It never stores readings. The saved data has a
   version number, so an older copy of the app can't overwrite data saved by a
   newer one.
-- **Server (optional):** `app.py` is a small [Flask](https://flask.palletsprojects.com)
-  app that serves the page and adds note reading. The page asks `/api/status`
-  whether note reading is available and shows the "Type a note" tab only if it is.
-- **Model:** `llama3.2:3b` running through Ollama
-- **Structured output:** Ollama is given a JSON schema, so the model can only
-  reply in the shape the app expects (a list of readings)
-- **Plain-code safety net:** the model only reads the note. Plausibility checks
-  (for example, "systolic must be higher than diastolic") are ordinary code, and
-  the app shows what the model read and asks you to confirm before saving.
-
-## Try the parser on its own
-
-1. Install Ollama and run `ollama pull llama3.2:3b`
-2. Install Python 3 (no extra packages needed for the parser)
-3. Run `python parse_test.py` for a quick demo
-4. Run `python score.py` to score the model on the test notes
-
-## Parser results so far (llama3.2:3b, 11 GB RAM PC, no GPU, offline)
-
-| Stage                                            | Result                                                |
-| ------------------------------------------------ | ----------------------------------------------------- |
-| First version, single reading per note           | 28/30 on made-up notes, then 30/30 after a prompt fix |
-| Multi-reading version, first run on unseen notes | 16/20                                                 |
-| After worked examples and a small code filter    | 19/20 on a fresh unseen set                           |
-
-About 5 to 7 seconds per note. The test notes are made up and tidier than real
-ones, and 20 notes is a small sample, so treat these as encouraging, not final.
-
-Known weak spots: spoken-style numbers ("one fifty over ninety five" came back
-as 155/95) and a pulse occasionally attached to the wrong reading. That's why
-the app always shows what it read and asks for confirmation before saving.
 
 ## Files
 
@@ -226,10 +165,6 @@ the app always shows what it read and asks for confirmation before saving.
 - `tests/browser/`: tests that use the real page in headless Chrome or Edge.
   Run `node tests/browser/run.mjs` (Node 22 or newer, with Chrome, Edge or
   Chromium installed; set `CHROME_PATH` if it isn't found)
-- `app.py`: optional local server that serves the page and reads notes with Ollama
-- `parse_test.py`: sends a note to the local model and returns structured readings
-- `test_set.py`: made-up test notes with the correct answers
-- `score.py`: scores the model on the test notes
 
 ## Not medical advice
 

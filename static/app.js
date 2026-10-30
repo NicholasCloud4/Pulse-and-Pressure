@@ -1,25 +1,10 @@
 const $ = (id) => document.getElementById(id);
-const JSON_HEADERS = { "Content-Type": "application/json" };
 const FIELDS = ["systolic", "diastolic", "pulse"];
 const STATUS = { normal: "good", elevated: "warning", stage1: "serious", stage2: "critical", crisis: "critical" };
 const options = { positions: POSITIONS, tags: TAGS, categories: CATEGORIES };
 const DAY = 86400000;
 
-// Words in a typed note that pre-select a tag or position (you can still change them)
-const TAG_HINTS = {
-    medication: /\b(meds?|medication|medicine|pills?)\b/i,
-    stressed: /\b(stress|stressed|stressful|anxious|upset|tense)\b/i,
-    exercise: /\b(exercis\w*|walk\w*|run|ran|running|jog\w*|gym|workout|bike|biking|swim\w*)\b/i,
-    caffeine: /\b(coffee|caffeine|espresso|energy drink|tea|soda)\b/i,
-};
-const POSITION_HINTS = {
-    sitting: /\b(sit|sitting|sat|seated)\b/i,
-    standing: /\b(stand|standing|stood)\b/i,
-    lying: /\b(lying|laying|lay|lie|in bed)\b/i,
-};
-
 let profileId = null;
-let draft = [];
 let chartData = [];
 const PAGE_SIZE = 10;  // readings per page in "Recent readings"
 let historyPage = 0;
@@ -32,22 +17,7 @@ let latestReading = null;
 // "Take another" makes the next reading join it, and their average is shown.
 const session = { id: null, count: 0, joining: false, readyAt: 0, timer: null };
 const quick = { position: null, tags: new Set(), timeTouched: false };
-const noteDetails = { position: null, tags: new Set() };
 const editDetails = { position: null, tags: new Set() };
-
-// Only used for reading notes, which needs app.py and Ollama on a computer
-async function api(path, options) {
-    const res = await fetch(path, options);
-    let data = {};
-    try { data = await res.json(); } catch (e) { /* no body */ }
-    if (!res.ok) {
-        const err = new Error(data.error || "Something went wrong.");
-        err.status = res.status;
-        err.data = data;
-        throw err;
-    }
-    return data;
-}
 
 // Small per-device preferences (not readings)
 function store(key, value) {
@@ -271,7 +241,6 @@ async function deletePerson() {
     }
     ["lastExport:", "backupSnooze:"].forEach((key) => forget(key + profileId));
     forget("profileId");
-    cancelDraft();
     $("crisis").hidden = true;
     renderProfiles();
     toast("Deleted " + name + ".");
@@ -316,16 +285,7 @@ function detailsOf(state) {
     return { position: state.position, tags: [...state.tags] };
 }
 
-// The unusual-looking numbers in some readings, numbered when there's more than one
-function problemsIn(readings) {
-    const problems = [];
-    readings.forEach((r, i) => looksPlausible(r).forEach((p) => {
-        problems.push(readings.length > 1 ? "Reading " + (i + 1) + ": " + p : p);
-    }));
-    return problems;
-}
-
-// ---------- Saving (shared by both ways of logging) ----------
+// ---------- Saving ----------
 function saveReadings(readings, extra, showError) {
     try {
         return addReadings(profileId, readings, extra);
@@ -413,7 +373,7 @@ function saveQuick(force) {
     // An untouched time means "now"
     reading.taken_at = quick.timeTouched ? $("q-when").value : null;
 
-    const problems = problemsIn([reading]);
+    const problems = looksPlausible(reading);
     if (problems.length && force !== true) {
         showStatus("", false);
         showCheck($("q-check"), problems, () => saveQuick(true), $("q-systolic"));
@@ -434,140 +394,6 @@ function saveQuick(force) {
     resetQuickTime();
     afterSave(result, quick.position);
     offerSession(result.readings[0]);
-}
-
-function setMode(mode) {
-    $("quick-mode").hidden = mode !== "quick";
-    $("note-mode").hidden = mode !== "note";
-    $("tab-quick").setAttribute("aria-selected", mode === "quick");
-    $("tab-note").setAttribute("aria-selected", mode === "note");
-    if (mode === "quick") cancelDraft();
-    stopSessionWait(true);
-    showStatus("", false);
-    store("mode", mode);
-}
-
-// The note tab only shows when app.py is running with Ollama (not on the website)
-async function checkNotes() {
-    let available = false;
-    try {
-        available = !!(await api("/api/status")).notes;
-    } catch (e) { /* no server: hosted as a plain website */ }
-    $("tabs").hidden = !available;
-    setMode(available && recall("mode") === "note" ? "note" : "quick");
-}
-
-// ---------- Reading a note ----------
-async function readNote() {
-    const note = $("note").value.trim();
-    if (!note) { showStatus("Type a reading first.", true); return; }
-
-    $("read").disabled = true;
-    showStatus("Reading your note... this can take a few seconds.", false);
-    try {
-        const data = await api("/api/parse", { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ note }) });
-        const when = nowLocal();
-        draft = data.readings.map((r) => ({
-            systolic: r.systolic, diastolic: r.diastolic, pulse: r.pulse,
-            problems: r.problems || [], taken_at: when,
-        }));
-        noteDetails.tags = new Set(Object.keys(options.tags).filter((k) => TAG_HINTS[k] && TAG_HINTS[k].test(note)));
-        noteDetails.position = Object.keys(options.positions).find((k) => POSITION_HINTS[k] && POSITION_HINTS[k].test(note))
-            || savedPosition();
-        renderDetails($("n-details"), noteDetails);
-        showStatus("", false);
-        renderDraft();
-    } catch (e) {
-        showStatus(e.message, true);
-    } finally {
-        $("read").disabled = false;
-    }
-}
-
-function rowEl(r, i) {
-    const wrap = document.createElement("div");
-    wrap.className = "row";
-
-    const head = document.createElement("div");
-    head.className = "row-head";
-    const title = document.createElement("strong");
-    title.textContent = "Reading " + (i + 1);
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.className = "link danger";
-    remove.textContent = "Remove";
-    remove.onclick = () => { draft.splice(i, 1); renderDraft(); };
-    head.append(title, remove);
-
-    const warn = document.createElement("p");
-    warn.className = "warn";
-    warn.hidden = r.problems.length === 0;
-    warn.textContent = r.problems.length ? "Please double-check: " + r.problems.join(", ") + "." : "";
-
-    const grid = document.createElement("div");
-    grid.className = "grid";
-    [["systolic", "Top (systolic)"], ["diastolic", "Bottom (diastolic)"], ["pulse", "Pulse"]].forEach(([key, label]) => {
-        const l = document.createElement("label");
-        l.textContent = label;
-        const inp = document.createElement("input");
-        inp.type = "number";
-        inp.inputMode = "numeric";
-        inp.step = "1";
-        inp.min = "0";
-        inp.value = r[key] === null || r[key] === undefined ? "" : r[key];
-        inp.oninput = () => {
-            r[key] = inp.value === "" ? null : parseInt(inp.value, 10);
-            warn.hidden = true;  // checked again when you save
-        };
-        l.appendChild(inp);
-        grid.appendChild(l);
-    });
-
-    const whenLabel = document.createElement("label");
-    whenLabel.textContent = "When";
-    const when = document.createElement("input");
-    when.type = "datetime-local";
-    when.value = r.taken_at;
-    when.max = nowLocal();
-    when.oninput = () => { r.taken_at = when.value; };
-    whenLabel.appendChild(when);
-
-    wrap.append(head, grid, whenLabel, warn);
-    return wrap;
-}
-
-function renderDraft() {
-    const box = $("rows");
-    box.replaceChildren();
-    draft.forEach((r, i) => box.appendChild(rowEl(r, i)));
-    $("empty-msg").hidden = draft.length > 0;
-    $("save").disabled = draft.length === 0;
-    $("n-check").hidden = true;
-    $("n-error").textContent = "";
-    $("confirm").hidden = false;
-    $("confirm").scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-function cancelDraft() {
-    draft = [];
-    $("confirm").hidden = true;
-}
-
-function saveDraft(force) {
-    const readings = draft.map((r) => ({ systolic: r.systolic, diastolic: r.diastolic, pulse: r.pulse, taken_at: r.taken_at }));
-    const problems = problemsIn(readings);
-    if (problems.length && force !== true) {
-        showCheck($("n-check"), problems, () => saveDraft(true), $("rows").querySelector("input") || $("save"));
-        return;
-    }
-    $("n-check").hidden = true;
-    $("n-error").textContent = "";
-    const result = saveReadings(readings, { note: $("note").value.trim(), ...detailsOf(noteDetails) },
-        (message) => { $("n-error").textContent = message; });
-    if (!result) return;
-    $("note").value = "";
-    cancelDraft();
-    afterSave(result, noteDetails.position);
 }
 
 // ---------- Shared display helpers ----------
@@ -844,7 +670,7 @@ async function editReading(r) {
             const v = $("e-" + key).value;
             reading[key] = v === "" ? null : parseInt(v, 10);
         });
-        const problems = problemsIn([reading]);
+        const problems = looksPlausible(reading);
         if (problems.length && !force) {
             showCheck($("e-check"), problems, () => { force = true; $("edit-form").requestSubmit(); }, $("e-systolic"));
             return undefined;
@@ -1068,8 +894,6 @@ async function restoreFile(file) {
 }
 
 // ---------- Wire it up ----------
-$("tab-quick").onclick = () => setMode("quick");
-$("tab-note").onclick = () => setMode("note");
 $("q-save").onclick = () => saveQuick();
 // Enter moves top → bottom → pulse, then saves (from the pulse or the note)
 const NEXT_FIELD = { systolic: "diastolic", diastolic: "pulse" };
@@ -1092,15 +916,7 @@ Object.entries(COMPLETE_AT).forEach(([key, twoDigitMin]) => {
 });
 $("q-when").oninput = () => { quick.timeTouched = true; };
 $("quick-mode").addEventListener("input", () => { $("q-check").hidden = true; });  // numbers changed: check again on save
-$("read").onclick = readNote;
-$("save").onclick = () => saveDraft();
-$("cancel").onclick = cancelDraft;
-$("rows").addEventListener("input", () => { $("n-check").hidden = true; });
 $("edit-form").addEventListener("input", () => { $("e-check").hidden = true; });
-$("add-row").onclick = () => {
-    draft.push({ systolic: null, diastolic: null, pulse: null, problems: [], taken_at: nowLocal() });
-    renderDraft();
-};
 $("crisis-close").onclick = () => { $("crisis").hidden = true; };
 $("add-profile").onclick = () => openPersonDialog();
 $("edit-profile").onclick = () => editPerson();
@@ -1120,7 +936,6 @@ $("welcome-form").onsubmit = (e) => {
 $("profile").onchange = () => {
     profileId = $("profile").value;
     store("profileId", profileId);
-    cancelDraft();
     stopSessionWait(true);
     showStatus("", false);
     $("q-check").hidden = true;
@@ -1201,8 +1016,6 @@ function start() {
     });
     renderDetails($("q-details"), quick);
     resetQuickTime();
-    setMode("quick");
-    checkNotes();
     renderProfiles();
 }
 

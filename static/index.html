@@ -71,12 +71,7 @@
             <p id="latest" class="latest" hidden></p>
             <section id="entry" class="card">
                 <h2>Log a reading</h2>
-                <div id="tabs" class="tabs" role="tablist" aria-label="How to log" hidden>
-                    <button id="tab-quick" type="button" role="tab" aria-controls="quick-mode">Quick entry</button>
-                    <button id="tab-note" type="button" role="tab" aria-controls="note-mode">Type a note</button>
-                </div>
-
-                <div id="quick-mode" role="tabpanel" aria-labelledby="tab-quick">
+                <div id="quick-mode">
                     <div class="grid">
                         <label>Top (systolic)<input id="q-systolic" type="number" inputmode="numeric" min="0"
                                 step="1" enterkeyhint="next"></label>
@@ -94,14 +89,6 @@
                         <button id="q-save" class="primary" type="button">Save reading</button>
                     </div>
                 </div>
-
-                <div id="note-mode" role="tabpanel" aria-labelledby="tab-note" hidden>
-                    <textarea id="note"
-                        placeholder="Type or dictate it the way you'd write a note, like: 128 over 82, pulse 71, after coffee"></textarea>
-                    <div class="actions">
-                        <button id="read" class="primary" type="button">Read it</button>
-                    </div>
-                </div>
                 <p id="status" class="status" role="status"></p>
                 <div id="session" class="session" hidden>
                     <p id="session-text"></p>
@@ -109,25 +96,6 @@
                         <button id="session-skip" class="compact" type="button">Skip the wait</button>
                         <button id="session-stop" class="compact" type="button">Stop</button>
                     </div>
-                </div>
-            </section>
-
-            <section id="confirm" class="card" hidden>
-                <h2>Check before saving</h2>
-                <p class="muted">This is what the model read from your note. Fix anything that looks wrong. Nothing is
-                    saved until you tap Save.</p>
-                <p id="empty-msg" class="warn" hidden>Nothing to save yet. Add a reading by hand below, or cancel and
-                    rewrite the note.</p>
-                <div id="rows"></div>
-                <div class="actions">
-                    <button id="add-row" type="button">+ Add a reading</button>
-                </div>
-                <div id="n-details" class="details"></div>
-                <div id="n-check" class="check" role="alert" hidden></div>
-                <p id="n-error" class="status error" role="alert"></p>
-                <div class="actions">
-                    <button id="save" class="primary" type="button">Save</button>
-                    <button id="cancel" type="button">Cancel</button>
                 </div>
             </section>
 
